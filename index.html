@@ -1,0 +1,1053 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.164.1/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.164.1/examples/jsm/"
+    }
+  }
+  </script>
+  <title>קרב העי - משחק 3D תנ״כי</title>
+  <style>
+    :root {
+      --ink: #24170d;
+      --linen: #f4e7c7;
+      --linen-strong: #fff3cf;
+      --bronze: #9b6429;
+      --bronze-dark: #5b351c;
+      --teal: #2e6d68;
+      --teal-dark: #17413f;
+      --red: #9a3e2f;
+      --gold: #d5a23f;
+      --shadow: rgba(31, 21, 12, .45);
+      --panel: rgba(255, 239, 199, .9);
+      --panel-deep: rgba(80, 45, 19, .72);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      overflow: hidden;
+      background: #130f0b;
+      color: var(--ink);
+      font-family: "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif;
+      letter-spacing: 0;
+      user-select: none;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background: #130f0b;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #vignette,
+    #sandLayer,
+    #damageFlash,
+    #fadeCurtain {
+      pointer-events: none;
+      position: fixed;
+      inset: 0;
+      z-index: 4;
+    }
+
+    #vignette {
+      background:
+        radial-gradient(ellipse 120% 100% at 50% 42%, rgba(255,255,255,0) 32%, rgba(140,95,60,.14) 58%, rgba(50,28,14,.48) 100%),
+        linear-gradient(185deg, rgba(255,235,200,.15) 0%, rgba(255,225,150,.08) 35%, rgba(82,45,24,.20) 100%);
+      mix-blend-mode: multiply;
+    }
+
+    #sandLayer {
+      opacity: .14;
+      background-image:
+        repeating-linear-gradient(3deg, rgba(255,255,255,.20) 0 1px, transparent 1px 14px),
+        repeating-linear-gradient(94deg, rgba(75,42,22,.22) 0 1px, transparent 1px 18px);
+      transform: translateZ(0);
+      animation: sandDrift 16s linear infinite;
+    }
+
+    @keyframes sandDrift {
+      from { background-position: 0 0, 0 0; }
+      to { background-position: 180px 40px, -80px 120px; }
+    }
+
+    #damageFlash {
+      opacity: 0;
+      background: rgba(165, 42, 28, .42);
+      transition: opacity .18s ease;
+    }
+
+    #damageFlash.show {
+      opacity: 1;
+    }
+
+    #fadeCurtain {
+      opacity: 0;
+      background: #130f0b;
+      transition: opacity .8s ease;
+      z-index: 19;
+    }
+
+    #fadeCurtain.show {
+      opacity: .48;
+    }
+
+    .hud {
+      position: fixed;
+      inset: 0;
+      z-index: 8;
+      pointer-events: none;
+      padding: 18px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 14px;
+    }
+
+    .hudTop {
+      display: grid;
+      grid-template-columns: minmax(260px, 440px) 1fr minmax(240px, 360px);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .stonePanel,
+    .miniPanel,
+    .controlsPanel,
+    .objectivePanel {
+      border: 1px solid rgba(100, 60, 32, .65);
+      box-shadow: 0 16px 45px var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .scrollPanel {
+      background:
+        linear-gradient(90deg, rgba(105,60,25,.22), transparent 7%, transparent 93%, rgba(105,60,25,.22)),
+        var(--panel);
+      border-radius: 8px;
+      padding: 14px 16px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(100, 60, 30, .45);
+      box-shadow: 0 12px 35px var(--shadow);
+    }
+
+    .scrollPanel::before,
+    .scrollPanel::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 8px;
+      background: rgba(91, 53, 28, .35);
+    }
+
+    .scrollPanel::before {
+      right: 0;
+    }
+
+    .scrollPanel::after {
+      left: 0;
+    }
+
+    .stonePanel,
+    .miniPanel,
+    .controlsPanel,
+    .objectivePanel {
+      background:
+        linear-gradient(165deg, rgba(255, 240, 210, .10) 0%, transparent 42%),
+        var(--panel-deep);
+      color: #fffaed;
+      border-radius: 10px;
+      box-shadow:
+        0 16px 45px var(--shadow),
+        inset 0 1px 0 rgba(255, 240, 220, .14);
+    }
+
+    .objectivePanel {
+      padding: 16px;
+      max-width: 460px;
+    }
+
+    .objectivePanel h2,
+    .scrollPanel h2,
+    .miniPanel h2 {
+      margin: 0;
+      font-size: clamp(18px, 2vw, 28px);
+      line-height: 1.15;
+      font-weight: 820;
+      color: #fffbea;
+    }
+
+    .objectivePanel p,
+    .scrollPanel p,
+    .miniPanel p {
+      margin: 10px 0 0;
+      line-height: 1.50;
+      font-size: 15px;
+      color: rgba(255,245,220,.92);
+    }
+
+    .missionRow {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    .missionSeal {
+      flex: 0 0 48px;
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #9d6a35, #6f4a20);
+      border: 2.5px solid #e8c86d;
+      color: #fff9d8;
+      font-size: 24px;
+      box-shadow: 
+        inset 0 0 0 4px rgba(50,28,12,.28),
+        0 6px 16px rgba(0,0,0,.25);
+      font-weight: 900;
+    }
+
+    .missionText {
+      min-width: 0;
+      font-size: 16px;
+      line-height: 1.38;
+      font-weight: 720;
+      color: rgba(255,245,220,.95);
+    }
+
+    .statusGrid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .statBox {
+      min-height: 82px;
+      padding: 12px 11px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, rgba(255, 250, 228, .18), rgba(255, 245, 211, .10));
+      border: 1px solid rgba(255, 232, 176, .38);
+      box-shadow: inset 0 1px 2px rgba(255, 255, 255, .08);
+      animation: shimmer 3.5s ease-in-out infinite;
+    }
+
+    .statLabel {
+      color: rgba(255,245,220,.85);
+      font-size: 12px;
+      margin-bottom: 7px;
+      font-weight: 700;
+      letter-spacing: .05em;
+    }
+
+    .meter {
+      height: 12px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(25, 18, 12, .65);
+      border: 1px solid rgba(255, 236, 190, .24);
+      box-shadow: inset 0 1px 2px rgba(0,0,0,.2);
+    }
+
+    .meter span {
+      display: block;
+      height: 100%;
+      width: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #d9614a, #f0c878);
+      transform-origin: right center;
+      transition: transform .18s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      box-shadow: inset 0 1px 2px rgba(255,255,255,.1);
+    }
+
+    .meter.teal span {
+      background: linear-gradient(90deg, #2a8580, #72d4a8);
+      box-shadow: inset 0 1px 2px rgba(255,255,255,.08);
+    }
+
+    .meter.gold span {
+      background: linear-gradient(90deg, #d4901f, #fef5a8);
+      box-shadow: inset 0 1px 2px rgba(255,255,255,.12);
+    }
+
+    .statValue {
+      margin-top: 6px;
+      font-size: 17px;
+      font-weight: 800;
+      color: #fff2cd;
+    }
+
+    .miniPanel {
+      padding: 12px;
+      justify-self: end;
+      width: min(360px, 100%);
+    }
+
+    #miniMap {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1.85 / 1;
+      margin-top: 10px;
+      border-radius: 8px;
+      background: rgba(250, 235, 200, .12);
+      border: 1.5px solid rgba(255, 240, 195, .42);
+      box-shadow: inset 0 2px 6px rgba(0,0,0,.12);
+    }
+
+    .chapterStrip {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .chapterDot {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      border: 1.5px solid rgba(255,240,200,.5);
+      background: rgba(20,13,8,.45);
+      color: rgba(255,245,215,.78);
+      font-weight: 700;
+      transition: all .2s ease;
+    }
+
+    .chapterDot.active {
+      background: var(--gold);
+      color: #382206;
+      border-color: #fff0c2;
+      font-weight: 850;
+      box-shadow: 0 0 12px rgba(245,210,117,.3);
+    }
+
+    .chapterDot.done {
+      background: var(--teal);
+      color: #f8ffef;
+      border-color: #5dddbb;
+      box-shadow: inset 0 0 6px rgba(0,0,0,.2);
+    }
+
+    .centerReticle {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: 22px;
+      height: 22px;
+      margin: -11px 0 0 -11px;
+      z-index: 7;
+      pointer-events: none;
+      opacity: .72;
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .4));
+    }
+
+    .centerReticle::before,
+    .centerReticle::after {
+      content: "";
+      position: absolute;
+      background: rgba(255, 248, 220, .92);
+      border-radius: 1px;
+    }
+
+    .centerReticle::before {
+      width: 2px;
+      height: 22px;
+      right: 10px;
+      top: 0;
+    }
+
+    .centerReticle::after {
+      width: 22px;
+      height: 2px;
+      right: 0;
+      top: 10px;
+    }
+
+    body.gameRunning .centerReticle {
+      opacity: .88;
+    }
+
+    .storyCard {
+      position: fixed;
+      z-index: 20;
+      right: 50%;
+      bottom: 36px;
+      transform: translateX(50%);
+      width: min(760px, calc(100vw - 32px));
+      color: var(--ink);
+      pointer-events: auto;
+      opacity: 0;
+      translate: 0 18px;
+      visibility: hidden;
+      transition: opacity .34s ease, translate .34s ease, visibility .34s ease;
+    }
+
+    .storyCard.show {
+      opacity: 1;
+      translate: 0 0;
+      visibility: visible;
+    }
+
+    .storyCard .scrollPanel {
+      padding: 20px 24px 18px;
+      box-shadow: 
+        0 20px 60px rgba(0,0,0,.32),
+        inset 0 1px 0 rgba(255,255,255,.08);
+    }
+
+    .storyKicker {
+      color: var(--bronze-dark);
+      font-size: 13px;
+      font-weight: 900;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      letter-spacing: .08em;
+      opacity: .95;
+    }
+
+    .storyCard h1 {
+      margin: 0;
+      font-size: clamp(26px, 5vw, 48px);
+      line-height: 1.05;
+      font-weight: 950;
+      text-shadow: 0 2px 8px rgba(0,0,0,.15);
+    }
+
+    .storyCard p {
+      font-size: clamp(16px, 2vw, 20px);
+      margin-top: 12px;
+    }
+
+    .visuallyHidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .storyCinematic {
+      margin-top: 14px;
+      border-radius: 14px;
+      overflow: hidden;
+      aspect-ratio: 16 / 9;
+      max-height: min(36vh, 280px);
+      width: 100%;
+      background: #120e0a;
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, .07),
+        0 10px 40px rgba(0, 0, 0, .25);
+      position: relative;
+    }
+
+    .storyCinematic canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .storyCaption {
+      margin: 12px 0 0;
+      font-size: clamp(15px, 2.4vw, 19px);
+      line-height: 1.5;
+      text-align: center;
+      color: var(--ink);
+      opacity: .94;
+      min-height: 2.8em;
+      font-weight: 650;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, .35);
+      transition: opacity .28s ease;
+    }
+
+    .storyActions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    .primaryBtn,
+    .ghostBtn {
+      pointer-events: auto;
+      border: 0;
+      border-radius: 8px;
+      min-height: 46px;
+      padding: 11px 20px;
+      cursor: pointer;
+      font-weight: 870;
+      box-shadow: 0 12px 28px rgba(60,35,18,.30);
+      transition: transform .14s ease, filter .14s ease, background .14s ease;
+    }
+
+    .primaryBtn {
+      color: #fff4d9;
+      background: linear-gradient(135deg, #8b5433, #6b3d22);
+      box-shadow: 0 10px 28px rgba(60,35,18,.35);
+    }
+
+    .primaryBtn:hover,
+    .ghostBtn:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.12);
+    }
+
+    .ghostBtn {
+      color: #3d2414;
+      background: rgba(255,255,255,.32);
+      border: 1.5px solid rgba(100,60,30,.4);
+    }
+
+    .storyHint {
+      font-size: 13px;
+      color: rgba(60,35,18,.80);
+      font-weight: 730;
+    }
+
+    .startOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle at 55% 35%, rgba(255,220,150,.35), transparent 36%),
+        linear-gradient(180deg, rgba(20,13,8,.75), rgba(20,13,8,.94));
+      color: var(--linen);
+    }
+
+    .startBox {
+      width: min(920px, 100%);
+      min-height: min(650px, 92vh);
+      display: grid;
+      grid-template-columns: 1.06fr .94fr;
+      gap: 0;
+      overflow: hidden;
+      border-radius: 8px;
+      border: 1px solid rgba(255,235,185,.35);
+      box-shadow: 0 32px 96px rgba(0,0,0,.58);
+      background: rgba(55, 32, 18, .92);
+    }
+
+    .titlePanel {
+      padding: clamp(24px, 5vw, 58px);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 32px;
+      background:
+        linear-gradient(90deg, rgba(230,180,95,.28), transparent 70%),
+        rgba(45, 28, 16, .76);
+    }
+
+    .titlePanel h1 {
+      margin: 0;
+      color: #fff9d8;
+      font-size: clamp(42px, 8vw, 88px);
+      line-height: .92;
+      font-weight: 970;
+      text-shadow: 0 3px 12px rgba(0,0,0,.25);
+    }
+
+    .titlePanel p {
+      margin: 18px 0 0;
+      max-width: 560px;
+      color: rgba(255,245,220,.92);
+      font-size: clamp(16px, 2.2vw, 21px);
+      line-height: 1.48;
+      font-weight: 500;
+    }
+
+    .titleMeta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .titlePill {
+      border: 1.5px solid rgba(255,240,200,.45);
+      border-radius: 999px;
+      padding: 8px 13px;
+      color: #fff0d4;
+      background: rgba(10,6,3,.25);
+      font-size: 13px;
+      font-weight: 820;
+      transition: all .2s ease;
+      backdrop-filter: blur(3px);
+    }
+
+    .titlePill:hover {
+      background: rgba(20,12,6,.35);
+      border-color: rgba(255,245,215,.58);
+    }
+
+    .startArt {
+      position: relative;
+      min-height: 360px;
+      background:
+        linear-gradient(180deg, rgba(255,215,130,.38), rgba(110,60,35,.25)),
+        #744527;
+      overflow: hidden;
+    }
+
+    .startArt canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .startArt::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(55,35,20,.90), transparent 35%, rgba(35,22,12,.18));
+      pointer-events: none;
+    }
+
+    .controlsPanel {
+      pointer-events: none;
+      align-self: end;
+      justify-self: start;
+      padding: 12px 14px;
+      width: min(410px, calc(100vw - 36px));
+    }
+
+    .controlsGrid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .controlLine {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      color: rgba(255,245,225,.92);
+      font-size: 14px;
+      line-height: 1.28;
+      font-weight: 600;
+    }
+
+    kbd {
+      min-width: 32px;
+      height: 28px;
+      display: inline-grid;
+      place-items: center;
+      padding: 0 8px;
+      border-radius: 6px;
+      color: #3a2410;
+      background: linear-gradient(180deg, #fef5d5, #f5e0ad);
+      border: 1.5px solid rgba(95,65,35,.4);
+      box-shadow: 
+        inset 0 -3px 0 rgba(120,85,45,.2),
+        0 3px 8px rgba(0,0,0,.15);
+      font: 850 12px/1 "Segoe UI", Arial, sans-serif;
+      transition: all .05s ease;
+    }
+
+    kbd:active {
+      transform: translateY(1px);
+      box-shadow: 
+        inset 0 -1px 0 rgba(120,85,45,.2),
+        0 1px 4px rgba(0,0,0,.1);
+    }
+
+    .toast {
+      position: fixed;
+      z-index: 18;
+      top: 108px;
+      right: 50%;
+      transform: translateX(50%);
+      width: min(520px, calc(100vw - 36px));
+      padding: 14px 18px;
+      color: #fff5d8;
+      background: rgba(65, 35, 18, .90);
+      border: 1px solid rgba(255,240,200,.32);
+      border-radius: 8px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.38);
+      opacity: 0;
+      translate: 0 -12px;
+      transition: opacity .20s ease, translate .20s ease;
+      pointer-events: none;
+      text-align: center;
+      font-weight: 760;
+      backdrop-filter: blur(4px);
+    }
+
+    .toast.show {
+      opacity: 1;
+      translate: 0 0;
+    }
+
+    .lowHealth {
+      animation: pulseRed 0.8s ease-in-out infinite;
+    }
+
+    @keyframes pulseRed {
+      0%, 100% { filter: none; }
+      50% { filter: sepia(.6) saturate(1.6) hue-rotate(-18deg) brightness(1.1); }
+    }
+
+    @keyframes glow {
+      0%, 100% { filter: drop-shadow(0 0 4px rgba(255,200,100,.3)); }
+      50% { filter: drop-shadow(0 0 12px rgba(255,200,100,.6)); }
+    }
+
+    @keyframes shimmer {
+      0%, 100% { opacity: .8; }
+      50% { opacity: 1; }
+    }
+
+    .statBox {
+      animation: shimmer 3s ease-in-out infinite;
+    }
+
+    .centerReticle {
+      animation: glow 2.2s ease-in-out infinite;
+    }
+
+    .gameOver {
+      position: fixed;
+      inset: 0;
+      z-index: 28;
+      display: none;
+      place-items: center;
+      padding: 24px;
+      background: rgba(18,12,8,.78);
+      color: var(--linen);
+      text-align: center;
+    }
+
+    .gameOver.show {
+      display: grid;
+    }
+
+    .gameOverBox {
+      width: min(620px, 100%);
+      padding: 32px;
+      border-radius: 8px;
+      background: rgba(255,245,215,.96);
+      color: var(--ink);
+      border: 1px solid rgba(120,70,35,.4);
+      box-shadow: 0 32px 96px rgba(0,0,0,.52);
+    }
+
+    .gameOverBox h2 {
+      margin: 0;
+      font-size: clamp(28px, 6vw, 52px);
+      font-weight: 900;
+      color: #3d2314;
+    }
+
+    .gameOverBox p {
+      font-size: 18px;
+      line-height: 1.50;
+      color: #5a3a2a;
+    }
+
+    .mobilePad {
+      display: none;
+      position: fixed;
+      z-index: 12;
+      inset: auto 14px 14px 14px;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+
+    .mobileCluster {
+      display: grid;
+      grid-template-columns: repeat(3, 48px);
+      grid-template-rows: repeat(2, 48px);
+      gap: 8px;
+      pointer-events: auto;
+    }
+
+    .mobileActions {
+      display: flex;
+      gap: 8px;
+      align-items: end;
+      pointer-events: auto;
+    }
+
+    .touchBtn {
+      width: 56px;
+      height: 56px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,240,200,.4);
+      color: #fffbea;
+      background: linear-gradient(135deg, rgba(75,42,22,.75), rgba(55,30,15,.65));
+      font-weight: 900;
+      box-shadow: 0 12px 28px rgba(0,0,0,.35);
+      transition: all .1s ease;
+    }
+
+    .touchBtn:active {
+      transform: scale(0.94);
+      box-shadow: 0 4px 12px rgba(0,0,0,.25);
+    }
+
+    .touchBtn[data-key="KeyW"] {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .touchBtn[data-key="KeyA"] {
+      grid-column: 1;
+      grid-row: 2;
+    }
+
+    .touchBtn[data-key="KeyS"] {
+      grid-column: 2;
+      grid-row: 2;
+    }
+
+    .touchBtn[data-key="KeyD"] {
+      grid-column: 3;
+      grid-row: 2;
+    }
+
+    @media (max-width: 920px) {
+      .hud {
+        padding: 10px;
+      }
+
+      .hudTop {
+        grid-template-columns: 1fr;
+      }
+
+      .miniPanel {
+        display: none;
+      }
+
+      .statusGrid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .objectivePanel {
+        max-width: none;
+      }
+
+      .controlsPanel {
+        display: none;
+      }
+
+      .mobilePad {
+        display: flex;
+      }
+
+      .startBox {
+        grid-template-columns: 1fr;
+        overflow-y: auto;
+        max-height: calc(100vh - 32px);
+      }
+
+      .startArt {
+        min-height: 240px;
+        order: -1;
+      }
+
+      .storyCard {
+        bottom: 92px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .statusGrid {
+        grid-template-columns: 1fr;
+      }
+
+      .statBox {
+        min-height: auto;
+      }
+
+      .hudTop .stonePanel {
+        display: none;
+      }
+
+      .storyActions {
+        align-items: stretch;
+      }
+
+      .primaryBtn,
+      .ghostBtn {
+        width: 100%;
+      }
+
+      .mobileCluster {
+        grid-template-columns: repeat(3, 44px);
+        grid-template-rows: repeat(2, 44px);
+      }
+
+      .touchBtn {
+        width: 48px;
+        height: 48px;
+      }
+    }
+  </style>
+<body>
+  <div id="app"></div>
+  <div id="vignette"></div>
+  <div id="sandLayer"></div>
+  <div id="damageFlash"></div>
+  <div id="fadeCurtain"></div>
+  <div class="centerReticle" aria-hidden="true"></div>
+
+  <section class="hud" aria-label="ממשק משחק">
+    <div class="hudTop">
+      <div class="objectivePanel">
+        <h2 id="phaseTitle">קרב העי</h2>
+        <p id="phaseText">לחץ התחלה כדי להיכנס אל המדבר שמול העי.</p>
+        <div class="missionRow">
+          <div class="missionSeal" id="missionSeal">א</div>
+          <div class="missionText" id="missionText">המשימה תופיע כאן.</div>
+        </div>
+      </div>
+
+      <div class="stonePanel" style="padding:12px;">
+        <div class="statusGrid">
+          <div class="statBox">
+            <div class="statLabel">כוח יהושע</div>
+            <div class="meter"><span id="healthBar"></span></div>
+            <div class="statValue" id="healthValue">100</div>
+          </div>
+          <div class="statBox">
+            <div class="statLabel">מורל המחנה</div>
+            <div class="meter teal"><span id="moraleBar"></span></div>
+            <div class="statValue" id="moraleValue">גבוה</div>
+          </div>
+          <div class="statBox">
+            <div class="statLabel">התקדמות הקרב</div>
+            <div class="meter gold"><span id="progressBar"></span></div>
+            <div class="statValue" id="progressValue">0%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="miniPanel">
+        <h2>מפת הקרב</h2>
+        <canvas id="miniMap" width="320" height="173"></canvas>
+        <div class="chapterStrip" id="chapterStrip"></div>
+      </div>
+    </div>
+
+    <div></div>
+
+    <div class="controlsPanel">
+      <strong>שליטה</strong>
+      <div class="controlsGrid">
+        <div class="controlLine"><kbd>WASD</kbd><span>תנועה</span></div>
+        <div class="controlLine"><kbd>עכבר</kbd><span>מבט</span></div>
+        <div class="controlLine"><kbd>Shift</kbd><span>ריצה קצרה</span></div>
+        <div class="controlLine"><kbd>רווח</kbd><span>הנפה / פעולה</span></div>
+        <div class="controlLine"><kbd>E</kbd><span>אות הכידון</span></div>
+        <div class="controlLine"><kbd>F</kbd><span>פתיחת אוהל לידך</span></div>
+        <div class="controlLine"><kbd>R</kbd><span>איפוס מצלמה</span></div>
+      </div>
+    </div>
+  </section>
+
+  <article class="storyCard" id="storyCard" aria-live="polite">
+    <div class="scrollPanel">
+      <div class="storyKicker" id="storyKicker">יהושע ח׳</div>
+      <h1 id="storyTitle">קרב העי</h1>
+      <div class="storyCinematic" id="storyCinematic" aria-hidden="true">
+        <canvas id="storySceneCanvas"></canvas>
+      </div>
+      <p class="storyCaption" id="storyCaption" aria-live="polite"></p>
+      <p class="visuallyHidden" id="storyBodySr">סיפור הקרב יופיע בזמן המשחק.</p>
+      <div class="storyActions">
+        <button class="primaryBtn" id="continueStory">המשך אל המשימה</button>
+        <button class="ghostBtn" id="hideStory">סגור</button>
+        <span class="storyHint">אפשר להמשיך גם עם Enter</span>
+      </div>
+    </div>
+  </article>
+
+  <div class="toast" id="toast"></div>
+
+  <section class="startOverlay" id="startOverlay">
+    <div class="startBox">
+      <div class="titlePanel">
+        <div>
+          <div class="titleMeta">
+            <span class="titlePill">משחק 3D</span>
+            <span class="titlePill">בהשראת יהושע ז׳-ח׳</span>
+            <span class="titlePill">סצנות סיפור תוך כדי משחק</span>
+          </div>
+          <h1>קרב העי</h1>
+          <p>
+            היכנס לנעלי יהושע בן נון: אסוף את הלוחמים, משוך את אנשי העי אל הבקעה,
+            הרם את הכידון לאות המארב, וחזור אל העיר כשעמוד העשן עולה מאחור.
+          </p>
+        </div>
+        <div>
+          <button class="primaryBtn" id="startGame">התחל משחק</button>
+          <button class="ghostBtn" id="startStory">פתח סיפור קודם</button>
+        </div>
+      </div>
+      <div class="startArt">
+        <canvas id="titleCanvas"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <section class="gameOver" id="gameOver">
+    <div class="gameOverBox">
+      <h2 id="gameOverTitle">הקרב נעצר</h2>
+      <p id="gameOverText">יהושע נפגע יותר מדי. אפשר לנסות שוב ולמשוך את האויב בזהירות.</p>
+      <button class="primaryBtn" id="restartGame">נסה שוב</button>
+    </div>
+  </section>
+
+  <div class="mobilePad" aria-hidden="true">
+    <div class="mobileCluster">
+      <button class="touchBtn" data-key="KeyW">↑</button>
+      <button class="touchBtn" data-key="KeyA">←</button>
+      <button class="touchBtn" data-key="KeyS">↓</button>
+      <button class="touchBtn" data-key="KeyD">→</button>
+    </div>
+    <div class="mobileActions">
+      <button class="touchBtn" data-key="Space">הנף</button>
+      <button class="touchBtn" data-key="KeyE">אות</button>
+    </div>
+  </div>
+
+  <script type="module" src="world.js"></script>
+  <script type="module" src="game.js"></script>
+</body>
+</html>
