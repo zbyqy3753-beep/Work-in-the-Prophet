@@ -44,6 +44,10 @@ const storySceneCanvas = document.getElementById("storySceneCanvas");
 const storyCaptionEl = document.getElementById("storyCaption");
 const storyBodySr = document.getElementById("storyBodySr");
 const storyCinematic = document.getElementById("storyCinematic");
+const cinemaTimeEl = document.getElementById("cinemaTime");
+const cinemaSceneTag = document.getElementById("cinemaSceneTag");
+const cinemaProgressBar = document.getElementById("cinemaProgressBar");
+const STORY_SHOT_SEC = 5.4;
 const storyKicker = document.getElementById("storyKicker");
 const phaseTitle = document.getElementById("phaseTitle");
 const phaseText = document.getElementById("phaseText");
@@ -72,63 +76,63 @@ const storyBeats = [
   {
     kicker: "פתיחה | אחרי הכישלון הראשון",
     title: "שיבה אל העי",
-    body: "לאחר הכאב והבירור במחנה, יהושע מקבל הוראה לשוב אל העי. הפעם הקרב אינו מסתער ישר אל החומה: הוא נבנה סביב מארב, תזמון ואות ברור בכידון.",
+    body: "לאחר הכישלון הראשון במחנה, יהושע שב אל העי. הפעם לא תקיפה ישירה על החומה — אלא מארב, תזמון, והרמת חרב לאות למלווים.",
     cinemaLines: [
-      "אחרי הכישלון — חוזרים אל העי, לא באותה צעדה.",
-      "הפעם: מארב, תזמון, ואות ברור בכידון.",
-      "המחנה מתארגן סביב שלושת שרי המחנה."
+      "אחרי הכישלון — שוב אל העי, בדרך אחרת.",
+      "מארב, סבלנות, ואות ברור: חרב מורמת לשמים.",
+      "שלושה אוהלי שרים — המחנה מתכונן לקרב."
     ],
     phaseTitle: "מחנה ישראל מול העי",
-    phaseText: "שלושה אוהלי מפקדים בשורה, מוקפים בחיל. בכל אוהל ממתין שר — פתח (F), התקרב ולחץ רווח לצירוף.",
-    mission: "פתח כל אוהל מפקד (F), התקרב לשלושת השרים ולחץ רווח כדי לצרף אותם.",
+    phaseText: "שלושה אוהלי שרים בשורה, מוקפים בגבעות. בכל אוהל ממתין שר — פתח (F), התקרב ולחץ רווח לצירוף.",
+    mission: "פתח כל אוהל מפקד (F), התקרב לשלושת השרים ולחץ רווח לצירופם למערך.",
     seal: "א"
   },
   {
     kicker: "שלב א׳ | המארב מתארגן",
     title: "לוחמים בין הסלעים",
-    body: "כוח נבחר נע בחשאי אל מאחורי העיר. יהושע נשאר גלוי מול העי, כדי שאנשי העיר יחשבו שישראל שוב נסוגים כמו בפעם הראשונה.",
+    body: "מבחר לוחמים מתגנבים מאחורי חומות העי. יהושע נשאר גלוי לעין — כאילו ישראל שוב נסוגים, כבפעם הראשונה.",
     cinemaLines: [
-      "כוח נבחר מתגלגל מאחורי חומות העיר.",
-      "יהושע נשאר גלוי — כמו נסיגה מהפעם הראשונה.",
-      "בעיני העי זה נראה כמו חזרה על אותה טעות."
+      "לוחמים בין הסלעים — המארב נסגר בשקט.",
+      "יהושע לפני השער — נראה כמו נסיגה.",
+      "אנשי העי יוצאים — בדיוק כמתוכנן."
     ],
     phaseTitle: "אל הרכס שמול העיר",
-    phaseText: "המארב כבר מסתתר מאחורי העי. על יהושע להופיע מול השער, בלי להיכנס לעיר מוקדם מדי.",
-    mission: "עלה אל הסמן שעל הרכס, מול שער העי.",
+    phaseText: "המארב מוכן מאחורי העיר. עליך להופיע מול השער, בלי להיתקל עם העיר מוקדם.",
+    mission: "עלה אל הסמן על הרכס, נגד שער העי.",
     seal: "ב"
   },
   {
     kicker: "שלב ב׳ | הפיתוי",
     title: "נסיגה מחושבת",
-    body: "אנשי העי יוצאים מן העיר ורודפים אחרי יהושע והעם. זה נראה כמו נסיגה, אבל זו מלכודת: צריך למשוך אותם רחוק מספיק מן החומה.",
+    body: "אנשי העי יוצאים מהעיר ורודפים אחרי מערך ישראל. זו לא נסיגה — מלכודת: למשוך אותם הרחק מהחומה.",
     cinemaLines: [
-      "שערי העי נפתחים — מרדף אחרי ישראל.",
-      "זה נראה כמו נסיגה; בפועל זו מלכודת.",
-      "צריך למשוך אותם רחוק מהחומה."
+      "שערי העיר נפתחים — צבא העי יוצא.",
+      "נראה כמו בריחה; זו הפתייה.",
+      "הרחק מהחומה — שם נסגר המלכוד."
     ],
     phaseTitle: "משוך את אנשי העי",
-    phaseText: "האויב רודף. שמור מרחק, השתמש בריצה קצרה, והובל אותם אל הבקעה שסומנה.",
-    mission: "משוך לפחות שמונה לוחמי העי אל הבקעה הדרומית.",
+    phaseText: "האויב רודף. שמור מרחק, רוץ בקצרה (Shift), והובל אותם אל הבקעה המסומנת.",
+    mission: "משוך לפחות שמונה לוחמי העי אל הבקעה.",
     seal: "ג"
   },
   {
-    kicker: "שלב ג׳ | אות הכידון",
-    title: "הכידון מורם",
-    body: "יהושע נוטה את הכידון אשר בידו אל העיר. זהו האות לכוח המסתתר: לצאת מן המארב, לרוץ אל העי ולהעלות בה עשן.",
+    kicker: "שלב ג׳ | אות החרב",
+    title: "החרב מורמת",
+    body: "יהושע מרים את חרבו לעבר העיר — האות לכוח המארב: לצאת מהמחבוא, לרוץ אל העי ולהעלות בה עשן.",
     cinemaLines: [
-      "הכידון נטוי אל העיר — רגע שקט לפני הסערה.",
-      "זה האות לכוח המסתתר: לצאת מהמארב.",
-      "ברגע הנכון — ריצה אל העי ועשן מעל הגגות."
+      "חרב מורמת אל העיר — רגע דומיה לפני הסערה.",
+      "זה האות: המארב יוצא ממקומו.",
+      "ריצה אל העיר — ועמוד עשן מעל הגגות."
     ],
     phaseTitle: "אות למארב",
-    phaseText: "העיר כמעט ריקה. עכשיו צריך לתת סימן חד וברור ללוחמים שמסתתרים מאחור.",
-    mission: "עמוד בסמן הזהב ולחץ E כדי להרים את הכידון.",
+    phaseText: "העיר כמעט ריקה. תן אות ברור ללוחמים המסתתרים מאחור בהרים.",
+    mission: "עמוד בסמן הזהב ולחץ E כדי להרים את החרב.",
     seal: "ד"
   },
   {
     kicker: "שלב ד׳ | העיר עולה בעשן",
     title: "המרדף מתהפך",
-    body: "כשאנשי העי רואים את העשן מן העיר, ליבם נחלש. ישראל פונה אליהם מן הבקעה, והמארב יוצא מאחור. הקרב מוכרע בתנועה משני כיוונים.",
+    body: "כשעמוד העשן עולה מעל העי, לב הרודפים נשבר. ישראל פונה מהבקעה והמארב יוצא מההר — הקרב נסגר משני רוחות.",
     cinemaLines: [
       "עשן מעל העיר — הלב נשבר לרודפים.",
       "ישראל פונה מהבקעה; המארב יוצא מאחור.",
@@ -162,6 +166,9 @@ const game = {
   visualTime: 0,
   storyCaptionIdx: 0,
   storyCaptionTimer: 0,
+  cinemaTime: 0,
+  cinemaShotFade: 1,
+  storyCaptionLock: false,
   health: 100,
   morale: 92,
   progress: 0,
@@ -247,8 +254,8 @@ function initWorld() {
     }
 
     function layoutStoryCanvas() {
-      if (!storySceneCanvas || !storyCinematic) return;
-      const rect = storyCinematic.getBoundingClientRect();
+      if (!storySceneCanvas) return;
+      const rect = (storyCard || storyCinematic).getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const pw = Math.max(2, Math.floor(rect.width * dpr));
       const ph = Math.max(2, Math.floor(rect.height * dpr));
@@ -256,6 +263,228 @@ function initWorld() {
         storySceneCanvas.width = pw;
         storySceneCanvas.height = ph;
       }
+    }
+
+    function formatCinemaClock(sec) {
+      const s = Math.max(0, Math.floor(sec));
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+    }
+
+    function cinemaTheme(pha) {
+      const themes = [
+        { sky0: "#1a3d62", sky1: "#e8a85a", sand0: "#c4a06a", sand1: "#6e5238", sun: "#ffd080", mood: "dawn" },
+        { sky0: "#142a48", sky1: "#7eb0d8", sand0: "#a89068", sand1: "#4a3828", sun: "#ffe8b0", mood: "stealth" },
+        { sky0: "#3a2e22", sky1: "#b08050", sand0: "#9a7848", sand1: "#3e2c1c", sun: "#ffcc88", mood: "chase" },
+        { sky0: "#121830", sky1: "#e89040", sand0: "#8a7048", sand1: "#2a1c10", sun: "#fff0b8", mood: "signal" },
+        { sky0: "#280e08", sky1: "#d84818", sand0: "#5a3428", sand1: "#120604", sun: "#ff9040", mood: "fire" },
+        { sky0: "#3a5088", sky1: "#f4d090", sand0: "#b8a078", sand1: "#5a4830", sun: "#fff4d0", mood: "victory" }
+      ];
+      return themes[clamp(pha, 0, themes.length - 1)];
+    }
+
+    function drawCinemaMountains(ctx, w, h, t, parallax, color) {
+      ctx.fillStyle = color;
+      for (let i = 0; i < 6; i++) {
+        const base = i * w * 0.22 - w * 0.1 + Math.sin(t * 0.18 + i) * parallax;
+        ctx.beginPath();
+        ctx.moveTo(base - 60, h * 0.58);
+        ctx.lineTo(base + w * 0.18, h * 0.28 - i * 8);
+        ctx.lineTo(base + w * 0.36, h * 0.58);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    function drawFilmGrain(ctx, w, h, t) {
+      ctx.fillStyle = "rgba(255,255,255,.045)";
+      for (let i = 0; i < 120; i++) {
+        const x = (Math.sin(i * 17.3 + t * 12) * 0.5 + 0.5) * w;
+        const y = (Math.cos(i * 11.7 + t * 9) * 0.5 + 0.5) * h;
+        ctx.fillRect(x, y, 1.6, 1.6);
+      }
+    }
+
+    function drawCinemaStars(ctx, w, h, t, amount = 80) {
+      for (let i = 0; i < amount; i++) {
+        const x = (Math.sin(i * 127.1) * 0.5 + 0.5) * w;
+        const y = (Math.cos(i * 311.7) * 0.5 + 0.5) * h * 0.55;
+        const tw = 0.35 + Math.sin(t * 2 + i) * 0.35;
+        ctx.fillStyle = `rgba(255,248,230,${0.15 + tw * 0.55})`;
+        ctx.fillRect(x, y, 1 + (i % 3) * 0.5, 1 + (i % 3) * 0.5);
+      }
+    }
+
+    function drawCinemaClouds(ctx, w, h, t, yBase) {
+      for (let c = 0; c < 5; c++) {
+        const cx = ((t * (8 + c * 3) + c * 180) % (w + 200)) - 100;
+        const cy = yBase + c * 12;
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 80 + c * 20);
+        g.addColorStop(0, "rgba(255,255,255,.14)");
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, 90 + c * 15, 28 + c * 4, 0, 0, TAU);
+        ctx.fill();
+      }
+    }
+
+    function drawCinemaDunes(ctx, w, h, t, color) {
+      ctx.fillStyle = color;
+      for (let i = 0; i < 7; i++) {
+        const ox = Math.sin(t * 0.15 + i * 1.4) * 30;
+        ctx.beginPath();
+        ctx.moveTo(-80 + ox + i * (w / 6), h * 0.52);
+        ctx.bezierCurveTo(
+          w * 0.15 + ox + i * (w / 6), h * 0.38 - i * 6,
+          w * 0.35 + ox + i * (w / 6), h * 0.58,
+          w * 0.55 + ox + i * (w / 6), h * 0.5
+        );
+        ctx.lineTo(w + 100, h * 0.62);
+        ctx.lineTo(-100, h * 0.62);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    function drawCinemaCity(ctx, w, h, t, alpha = 1) {
+      const cityX = w * 0.72 + Math.sin(t * 0.1) * 10;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      const wallGrad = ctx.createLinearGradient(cityX, h * 0.35, cityX, h * 0.72);
+      wallGrad.addColorStop(0, "rgba(48,34,24,.95)");
+      wallGrad.addColorStop(1, "rgba(22,14,10,.98)");
+      ctx.fillStyle = wallGrad;
+      ctx.fillRect(cityX - 52, h * 0.48, 104, h * 0.24);
+      ctx.fillRect(cityX - 68, h * 0.4, 136, h * 0.1);
+      const towers = [
+        [cityX - 40, h * 0.28, 18, h * 0.22],
+        [cityX - 8, h * 0.22, 22, h * 0.28],
+        [cityX + 28, h * 0.3, 16, h * 0.2]
+      ];
+      for (const [tx, ty, tw, th] of towers) {
+        ctx.fillRect(tx, ty, tw, th);
+        ctx.fillStyle = "rgba(18,12,8,.9)";
+        ctx.fillRect(tx - 2, ty - 6, tw + 4, 8);
+        ctx.fillStyle = wallGrad;
+      }
+      for (let win = 0; win < 14; win++) {
+        const wx = cityX - 44 + (win % 7) * 14;
+        const wy = h * 0.44 + Math.floor(win / 7) * 16;
+        const lit = 0.35 + Math.sin(t * 3 + win * 1.3) * 0.35;
+        ctx.fillStyle = `rgba(255,210,120,${lit * alpha})`;
+        ctx.fillRect(wx, wy, 6, 8);
+      }
+      ctx.restore();
+    }
+
+    function drawCinemaTents(ctx, w, h, t) {
+      for (let i = 0; i < 3; i++) {
+        const x = w * (0.2 + i * 0.16) + Math.sin(t * 0.35 + i) * 4;
+        const tw = 42 + i * 6;
+        const tentGrad = ctx.createLinearGradient(x, h * 0.5, x, h * 0.72);
+        tentGrad.addColorStop(0, "rgba(58,42,28,.95)");
+        tentGrad.addColorStop(1, "rgba(28,18,12,.98)");
+        ctx.fillStyle = tentGrad;
+        ctx.beginPath();
+        ctx.moveTo(x, h * 0.72);
+        ctx.lineTo(x - tw * 0.55, h * 0.48);
+        ctx.lineTo(x + tw * 0.55, h * 0.48);
+        ctx.closePath();
+        ctx.fill();
+        const glow = 0.5 + Math.sin(t * 3.5 + i * 2.1) * 0.35;
+        const fireG = ctx.createRadialGradient(x, h * 0.74, 0, x, h * 0.74, 22 + glow * 12);
+        fireG.addColorStop(0, `rgba(255,160,50,${0.55 * glow})`);
+        fireG.addColorStop(0.5, `rgba(255,90,20,${0.2 * glow})`);
+        fireG.addColorStop(1, "rgba(255,60,10,0)");
+        ctx.fillStyle = fireG;
+        ctx.beginPath();
+        ctx.arc(x, h * 0.74, 14 + glow * 8, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = `rgba(255,200,100,${0.25 * glow})`;
+        ctx.lineWidth = 1;
+        for (let f = 0; f < 5; f++) {
+          const fx = x + Math.sin(t * 8 + f + i) * 6;
+          const fy = h * 0.7 - f * 5 - Math.abs(Math.sin(t * 6 + f)) * 8;
+          ctx.beginPath();
+          ctx.moveTo(fx, fy + 8);
+          ctx.quadraticCurveTo(fx + Math.sin(t * 10 + f) * 4, fy, fx, fy - 4);
+          ctx.stroke();
+        }
+      }
+    }
+
+    function drawCinemaSilhouettes(ctx, w, h, t, count, y, speed, dir = 1) {
+      for (let i = 0; i < count; i++) {
+        const px = ((t * speed * dir + i * 52) % (w + 80)) - 40;
+        const bob = Math.sin(t * 5 + i) * 2.5;
+        const scale = 0.85 + (i % 4) * 0.08;
+        ctx.fillStyle = "rgba(10,8,6,.88)";
+        ctx.beginPath();
+        ctx.ellipse(px, y + bob + 12 * scale, 7 * scale, 3 * scale, 0, 0, TAU);
+        ctx.fill();
+        ctx.fillRect(px - 5 * scale, y - 10 * scale + bob, 10 * scale, 20 * scale);
+        ctx.beginPath();
+        ctx.arc(px, y - 14 * scale + bob, 5 * scale, 0, TAU);
+        ctx.fill();
+        if (dir > 0) {
+          ctx.fillRect(px + 5 * scale, y - 4 * scale + bob, 12 * scale, 3 * scale);
+        } else {
+          ctx.fillRect(px - 17 * scale, y - 4 * scale + bob, 12 * scale, 3 * scale);
+        }
+      }
+    }
+
+    function drawCinemaSmoke(ctx, w, h, t, cx, baseY, count, hot = false) {
+      for (let s = 0; s < count; s++) {
+        const rise = (t * (hot ? 32 : 20) + s * 45) % (h * 0.62);
+        const sx = cx + Math.sin(t * 1.1 + s * 1.9) * 48;
+        const sy = baseY - rise;
+        const r = 16 + s * 4 + Math.sin(t * 1.8 + s) * 6;
+        const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
+        g.addColorStop(0, hot ? "rgba(255,190,70,.5)" : "rgba(200,190,175,.28)");
+        g.addColorStop(0.4, hot ? "rgba(180,80,30,.2)" : "rgba(120,110,100,.12)");
+        g.addColorStop(1, "rgba(60,50,45,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, TAU);
+        ctx.fill();
+      }
+    }
+
+    function drawLightRays(ctx, w, h, t, x, y, color) {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      for (let r = 0; r < 5; r++) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        const spread = 0.08 + r * 0.04;
+        ctx.lineTo(x + Math.cos(t * 0.2 + r) * w * spread, h);
+        ctx.lineTo(x + Math.cos(t * 0.2 + r + 0.05) * w * spread * 1.2, h);
+        ctx.closePath();
+        ctx.globalAlpha = 0.06 + Math.sin(t + r) * 0.02;
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function advanceStoryShot(lines) {
+      if (game.storyCaptionLock) return;
+      game.storyCaptionLock = true;
+      storyCaptionEl.classList.add("isChanging");
+      setTimeout(() => {
+        game.storyCaptionIdx = (game.storyCaptionIdx + 1) % lines.length;
+        storyCaptionEl.textContent = lines[game.storyCaptionIdx];
+        game.storyCaptionTimer = 0;
+        game.cinemaShotFade = 0;
+        storyCaptionEl.classList.remove("isChanging");
+        game.storyCaptionLock = false;
+        if (cinemaSceneTag) {
+          cinemaSceneTag.textContent = `סצנה ${String(game.phase + 1).padStart(2, "0")} · שוט ${game.storyCaptionIdx + 1}/${lines.length}`;
+        }
+      }, 280);
     }
 
     function paintStoryScene(rawDt) {
@@ -268,11 +497,22 @@ function initWorld() {
 
       const beat = storyBeats[game.phase];
       const lines = beat.cinemaLines || [beat.title];
+      const pha = game.phase;
+      const t = game.visualTime;
+      game.cinemaTime += rawDt;
       game.storyCaptionTimer += rawDt;
-      if (game.storyCaptionTimer > 4.6) {
-        game.storyCaptionTimer = 0;
-        game.storyCaptionIdx = (game.storyCaptionIdx + 1) % lines.length;
-        storyCaptionEl.textContent = lines[game.storyCaptionIdx];
+      game.cinemaShotFade = Math.min(1, game.cinemaShotFade + rawDt * 2.8);
+
+      if (game.storyCaptionTimer > STORY_SHOT_SEC && !game.storyCaptionLock) {
+        advanceStoryShot(lines);
+      }
+
+      if (cinemaSceneTag) {
+        cinemaSceneTag.textContent = `סצנה ${String(pha + 1).padStart(2, "0")} · שוט ${game.storyCaptionIdx + 1}/${lines.length}`;
+      }
+      if (cinemaTimeEl) cinemaTimeEl.textContent = formatCinemaClock(game.cinemaTime);
+      if (cinemaProgressBar) {
+        cinemaProgressBar.style.width = `${clamp(game.storyCaptionTimer / STORY_SHOT_SEC, 0, 1) * 100}%`;
       }
 
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -284,137 +524,146 @@ function initWorld() {
       }
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const t = game.visualTime;
-      const pha = game.phase;
+      ctx.fillStyle = "#030201";
+      ctx.fillRect(0, 0, cssW, cssH);
+      const theme = cinemaTheme(pha);
       const cx = cssW * 0.5;
       const cy = cssH * 0.5;
-      const kb = 1 + Math.sin(t * 0.38) * 0.018;
+      const panX = Math.sin(t * 0.18 + pha * 0.7) * cssW * 0.04;
+      const panY = Math.cos(t * 0.14 + pha) * cssH * 0.025;
+      const zoom = 1.08 + Math.sin(t * 0.26) * 0.045;
+      const shot = game.storyCaptionIdx;
 
       ctx.save();
-      ctx.translate(cx, cy * 0.92);
-      ctx.scale(kb, kb);
-      ctx.translate(-cx, -cy * 0.92);
+      ctx.translate(cx + panX, cy + panY);
+      ctx.scale(zoom, zoom);
+      ctx.translate(-cx, -cy);
 
-      let skyTop; let skyBot; let sandTop; let sandBot;
-      if (pha <= 0) {
-        skyTop = "#2a5f8f"; skyBot = "#d9a066"; sandTop = "#c9a574"; sandBot = "#7a5c38";
-      } else if (pha === 1) {
-        skyTop = "#1e4a72"; skyBot = "#8cb4d4"; sandTop = "#b89a6a"; sandBot = "#5c4630";
-      } else if (pha === 2) {
-        skyTop = "#4a3a2c"; skyBot = "#a07850"; sandTop = "#9a7a52"; sandBot = "#4a3826";
-      } else if (pha === 3) {
-        skyTop = "#1a2040"; skyBot = "#e89848"; sandTop = "#8a6e48"; sandBot = "#3a2818";
-      } else if (pha === 4) {
-        skyTop = "#3a1510"; skyBot = "#cc5520"; sandTop = "#6a4030"; sandBot = "#1a0a08";
-      } else {
-        skyTop = "#3d5280"; skyBot = "#f0c890"; sandTop = "#b8a078"; sandBot = "#6a5840";
-      }
-
-      const gSky = ctx.createLinearGradient(0, 0, 0, cssH * 0.62);
-      gSky.addColorStop(0, skyTop);
-      gSky.addColorStop(1, skyBot);
+      const gSky = ctx.createLinearGradient(0, 0, 0, cssH * 0.72);
+      gSky.addColorStop(0, theme.sky0);
+      gSky.addColorStop(0.55, theme.sky1);
+      gSky.addColorStop(1, theme.sand0);
       ctx.fillStyle = gSky;
       ctx.fillRect(-cssW, -cssH, cssW * 3, cssH * 2);
 
-      const gSand = ctx.createLinearGradient(0, cssH * 0.48, 0, cssH * 1.4);
-      gSand.addColorStop(0, sandTop);
-      gSand.addColorStop(1, sandBot);
+      if (pha >= 1 && pha <= 3) drawCinemaStars(ctx, cssW, cssH, t, 100);
+      drawCinemaClouds(ctx, cssW, cssH, t, cssH * 0.18);
+
+      const sunX = cssW * (0.62 + Math.sin(t * 0.07) * 0.05);
+      const sunY = cssH * (0.2 + Math.cos(t * 0.09) * 0.025);
+      const sunG = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, cssW * 0.42);
+      sunG.addColorStop(0, theme.sun);
+      sunG.addColorStop(0.25, "rgba(255,210,120,.45)");
+      sunG.addColorStop(0.55, "rgba(255,160,60,.12)");
+      sunG.addColorStop(1, "rgba(255,140,40,0)");
+      ctx.fillStyle = sunG;
+      ctx.fillRect(0, 0, cssW, cssH * 0.75);
+      drawLightRays(ctx, cssW, cssH, t, sunX, sunY, "rgba(255,220,150,.35)");
+
+      drawCinemaMountains(ctx, cssW, cssH, t, 18, "rgba(42,32,22,.28)");
+      drawCinemaMountains(ctx, cssW, cssH, t, 36, "rgba(28,20,14,.55)");
+      drawCinemaDunes(ctx, cssW, cssH, t, "rgba(0,0,0,.08)");
+
+      const gSand = ctx.createLinearGradient(0, cssH * 0.42, 0, cssH);
+      gSand.addColorStop(0, theme.sand0);
+      gSand.addColorStop(0.6, theme.sand1);
+      gSand.addColorStop(1, "#1a1008");
       ctx.fillStyle = gSand;
-      ctx.fillRect(-cssW, cssH * 0.48, cssW * 3, cssH);
+      ctx.fillRect(-cssW, cssH * 0.4, cssW * 3, cssH * 1.2);
 
-      ctx.fillStyle = "rgba(0,0,0,.12)";
-      for (let i = 0; i < 5; i++) {
-        ctx.beginPath();
-        const ox = Math.sin(t * 0.22 + i * 1.7) * 22;
-        ctx.moveTo(-40 + ox + i * 60, cssH * 0.5);
-        ctx.bezierCurveTo(
-          80 + ox + i * 55, cssH * 0.42,
-          160 + ox + i * 50, cssH * 0.55,
-          cssW + 120 + ox + i * 45, cssH * 0.5
-        );
-        ctx.lineTo(cssW + 200, cssH * 0.62);
-        ctx.lineTo(-cssW, cssH * 0.62);
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      ctx.fillStyle = "rgba(20,12,8,.55)";
       if (pha === 0) {
-        for (let i = 0; i < 3; i++) {
-          const x = cssW * 0.28 + i * cssW * 0.18;
-          const tw = 28 + i * 4;
+        drawCinemaTents(ctx, cssW, cssH, t);
+        drawCinemaSilhouettes(ctx, cssW, cssH, t, 12, cssH * 0.68, 24);
+        drawCinemaCity(ctx, cssW, cssH, t, 0.2 + shot * 0.15);
+      } else if (pha === 1) {
+        drawCinemaCity(ctx, cssW, cssH, t, 0.85);
+        ctx.fillStyle = "rgba(22,16,12,.7)";
+        for (let r = 0; r < 5; r++) {
+          const rx = cssW * 0.08 + r * cssW * 0.11;
           ctx.beginPath();
-          ctx.moveTo(x, cssH * 0.72);
-          ctx.lineTo(x - tw * 0.5, cssH * 0.52);
-          ctx.lineTo(x + tw * 0.5, cssH * 0.52);
-          ctx.closePath();
+          ctx.ellipse(rx, cssH * 0.62, 38, 18, 0, 0, TAU);
           ctx.fill();
         }
-      }
-
-      if (pha >= 1) {
-        const cityX = cssW * 0.72 + Math.sin(t * 0.15) * 10;
-        ctx.fillRect(cityX - 38, cssH * 0.52, 76, cssH * 0.22);
-        ctx.fillRect(cityX - 52, cssH * 0.46, 104, cssH * 0.08);
-      }
-
-      if (pha === 2) {
-        ctx.fillStyle = "rgba(160,120,80,.25)";
-        for (let k = 0; k < 6; k++) {
-          const px = ((t * 40 + k * 70) % (cssW + 80)) - 40;
-          ctx.beginPath();
-          ctx.ellipse(px, cssH * 0.65, 36, 12, 0, 0, TAU);
-          ctx.fill();
-        }
-        ctx.fillStyle = "rgba(30,20,14,.6)";
+        drawCinemaSilhouettes(ctx, cssW, cssH, t, 5 + shot, cssH * 0.58, 12, 1);
+        ctx.strokeStyle = "rgba(255,220,140,.15)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 10]);
         ctx.beginPath();
-        ctx.arc(cssW * 0.35 + Math.sin(t * 1.2) * 30, cssH * 0.68, 5, 0, TAU);
-        ctx.arc(cssW * 0.42 + Math.sin(t * 1.2 + 0.5) * 30, cssH * 0.7, 4, 0, TAU);
-        ctx.fill();
-      }
-
-      if (pha === 3) {
-        ctx.strokeStyle = "rgba(255,210,120,.9)";
-        ctx.lineWidth = 5;
-        ctx.beginPath();
-        ctx.moveTo(cssW * 0.35, cssH * 0.85);
-        ctx.lineTo(cssW * 0.62, cssH * 0.38);
+        ctx.moveTo(cssW * 0.12, cssH * 0.6);
+        ctx.lineTo(cssW * 0.55, cssH * 0.52);
         ctx.stroke();
-        ctx.fillStyle = "rgba(255,220,140,.35)";
-        ctx.beginPath();
-        ctx.arc(cssW * 0.62, cssH * 0.36, 22 + Math.sin(t * 3) * 4, 0, TAU);
-        ctx.fill();
-      }
-
-      if (pha === 4) {
-        ctx.fillStyle = "rgba(255,90,30,.18)";
-        for (let s = 0; s < 8; s++) {
-          const sy = cssH * 0.3 - (t * 22 + s * 35) % (cssH * 0.5);
-          const sx = cssW * 0.55 + Math.sin(s + t) * 40;
+        ctx.setLineDash([]);
+      } else if (pha === 2) {
+        drawCinemaCity(ctx, cssW, cssH, t, 0.5);
+        drawCinemaSilhouettes(ctx, cssW, cssH, t, 10, cssH * 0.64, 52, 1);
+        drawCinemaSilhouettes(ctx, cssW, cssH, t, 6, cssH * 0.68, 38, -1);
+        ctx.fillStyle = "rgba(160,120,70,.22)";
+        for (let k = 0; k < 8; k++) {
+          const px = ((t * 55 + k * 65 + shot * 20) % (cssW + 100)) - 50;
           ctx.beginPath();
-          ctx.arc(sx, sy, 16 + s * 2, 0, TAU);
+          ctx.ellipse(px, cssH * 0.7, 42 + k * 2, 14, 0, 0, TAU);
           ctx.fill();
         }
-      }
-
-      if (pha >= 5) {
-        ctx.fillStyle = "rgba(255,255,255,.1)";
-        ctx.fillRect(0, cssH * 0.35, cssW, cssH * 0.15);
+      } else if (pha === 3) {
+        drawCinemaCity(ctx, cssW, cssH, t, 0.65);
+        const bladeGlow = 0.5 + Math.sin(t * 4) * 0.5;
+        const handX = cssW * 0.32;
+        const handY = cssH * 0.78;
+        ctx.strokeStyle = `rgba(255,230,150,${0.7 + bladeGlow * 0.3})`;
+        ctx.lineWidth = 5 + bladeGlow * 2;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(handX, handY);
+        ctx.lineTo(handX + 8, handY - cssH * 0.08);
+        ctx.lineTo(handX + 55, handY - cssH * 0.42);
+        ctx.stroke();
+        const tipX = handX + 58;
+        const tipY = handY - cssH * 0.44;
+        const tipG = ctx.createRadialGradient(tipX, tipY, 0, tipX, tipY, 40);
+        tipG.addColorStop(0, `rgba(255,240,180,${0.55 + bladeGlow * 0.4})`);
+        tipG.addColorStop(1, "rgba(255,200,80,0)");
+        ctx.fillStyle = tipG;
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, 24 + bladeGlow * 12, 0, TAU);
+        ctx.fill();
+        drawCinemaSilhouettes(ctx, cssW, cssH, t, 4, cssH * 0.55, 8, 1);
+      } else if (pha === 4) {
+        drawCinemaCity(ctx, cssW, cssH, t, 0.4);
+        drawCinemaSmoke(ctx, cssW, cssH, t, cssW * 0.72, cssH * 0.42, 10 + shot * 2, true);
+        drawCinemaSilhouettes(ctx, cssW, cssH, t, 7, cssH * 0.66, 18, -1);
+        drawCinemaSilhouettes(ctx, cssW, cssH, t, 7, cssH * 0.64, 22, 1);
+        ctx.fillStyle = "rgba(255,60,20,.12)";
+        ctx.fillRect(0, 0, cssW, cssH);
+      } else {
+        drawCinemaCity(ctx, cssW, cssH, t, 0.55);
+        drawCinemaSmoke(ctx, cssW, cssH, t, cssW * 0.7, cssH * 0.38, 5, false);
+        const light = ctx.createLinearGradient(0, cssH * 0.2, 0, cssH * 0.55);
+        light.addColorStop(0, "rgba(255,240,200,.18)");
+        light.addColorStop(1, "rgba(255,240,200,0)");
+        ctx.fillStyle = light;
+        ctx.fillRect(0, 0, cssW, cssH);
       }
 
       ctx.restore();
 
-      const grd = ctx.createRadialGradient(cx, cy, cssW * 0.12, cx, cy, cssW * 0.88);
-      grd.addColorStop(0, "rgba(0,0,0,0)");
-      grd.addColorStop(1, "rgba(0,0,0,.32)");
-      ctx.fillStyle = grd;
+      const fade = game.cinemaShotFade;
+      if (fade < 1) {
+        ctx.fillStyle = `rgba(0,0,0,${(1 - fade) * 0.55})`;
+        ctx.fillRect(0, 0, cssW, cssH);
+      }
+
+      const vig = ctx.createRadialGradient(cx, cy, cssW * 0.05, cx, cy, cssW * 0.95);
+      vig.addColorStop(0, "rgba(0,0,0,0)");
+      vig.addColorStop(0.65, "rgba(0,0,0,.12)");
+      vig.addColorStop(1, "rgba(0,0,0,.52)");
+      ctx.fillStyle = vig;
       ctx.fillRect(0, 0, cssW, cssH);
 
-      ctx.fillStyle = "rgba(255,255,255,.035)";
-      for (let n = 0; n < 36; n++) {
-        const rx = (Math.sin(n * 12.3 + t) * 0.5 + 0.5) * cssW;
-        const ry = (Math.cos(n * 9.1 + t * 0.7) * 0.5 + 0.5) * cssH;
-        ctx.fillRect(rx, ry, 1.2, 1.2);
+      drawFilmGrain(ctx, cssW, cssH, t);
+
+      if (pha === 4 && shot >= 1) {
+        ctx.fillStyle = `rgba(255,80,30,${0.04 + Math.sin(t * 8) * 0.02})`;
+        ctx.fillRect(0, 0, cssW, cssH);
       }
     }
 
@@ -426,16 +675,25 @@ function initWorld() {
       const lines = beat.cinemaLines || [beat.title];
       game.storyCaptionIdx = 0;
       game.storyCaptionTimer = 0;
+      game.cinemaTime = 0;
+      game.cinemaShotFade = 1;
+      game.storyCaptionLock = false;
+      storyCaptionEl.classList.remove("isChanging");
       storyCaptionEl.textContent = lines[0];
+      if (cinemaProgressBar) cinemaProgressBar.style.width = "0%";
+      if (cinemaTimeEl) cinemaTimeEl.textContent = "00:00";
+      if (cinemaSceneTag) {
+        cinemaSceneTag.textContent = `סצנה ${String(index + 1).padStart(2, "0")} · שוט 1/${lines.length}`;
+      }
       storyCard.classList.add("show");
-      fadeCurtain.classList.add("show");
+      document.body.classList.add("storyOpen");
       game.storyOpen = true;
       requestAnimationFrame(() => layoutStoryCanvas());
     }
 
     function hideStory() {
       storyCard.classList.remove("show");
-      fadeCurtain.classList.remove("show");
+      document.body.classList.remove("storyOpen");
       game.storyOpen = false;
       if (document.pointerLockElement !== renderer.domElement && game.started) {
         tryPointerLock();
@@ -582,9 +840,9 @@ function initWorld() {
         data.shield.rotation.x = attack * .18;
       }
 
-      if (data.spear && group !== player.group) {
-        data.spear.rotation.z = -.12 - attack * .5 + step * .045 * moving;
-        data.spear.rotation.x = .04 + counter * .035 * moving;
+      if (data.sword && group !== player.group) {
+        data.sword.rotation.z = -.38 - attack * .55 + step * .04 * moving;
+        data.sword.rotation.x = .06 + counter * .03 * moving;
       }
     }
 
@@ -643,11 +901,11 @@ function initWorld() {
       }
 
       player.attackSwing = Math.max(0, player.attackSwing - dt * 5.5);
-      player.spearRaised = lerp(player.spearRaised, game.signalGiven ? 1 : 0, 1 - Math.exp(-dt * 4));
-      if (player.spear) {
+      player.swordRaised = lerp(player.swordRaised, game.signalGiven ? 1 : 0, 1 - Math.exp(-dt * 4));
+      if (player.sword) {
         const attackTilt = Math.sin(player.attackSwing * Math.PI) * 1.1;
-        player.spear.rotation.z = lerp(-.12, -1.42, player.spearRaised) - attackTilt;
-        player.spear.rotation.x = Math.sin(game.time * 3) * .025;
+        player.sword.rotation.z = lerp(-.38, -1.75, player.swordRaised) - attackTilt;
+        player.sword.rotation.x = .06 + Math.sin(game.time * 3) * .02;
       }
 
       if (player.mantle) {
@@ -752,7 +1010,7 @@ function initWorld() {
     function handleSignal() {
       if (!game.started || game.storyOpen || game.isGameOver) return;
       if (game.phase !== 3) {
-        if (game.phase < 3) showToast("עוד מוקדם לאות הכידון. קודם צריך למשוך את אנשי העי.");
+        if (game.phase < 3) showToast("עוד מוקדם. קודם משוך את אנשי העי הרחק מהחומה.");
         return;
       }
       const marker = markers.signal;
@@ -762,8 +1020,8 @@ function initWorld() {
       }
       if (game.signalGiven) return;
       game.signalGiven = true;
-      player.spearRaised = 1;
-      showToast("הכידון מורם. המארב יוצא אל העיר.");
+      player.swordRaised = 1;
+      showToast("החרב מורמת — המארב יוצא אל העיר!");
       revealAmbush();
       igniteCity();
       setTimeout(() => {
@@ -1090,7 +1348,7 @@ function initWorld() {
         const insideValley = distance2D(player.position, marker.position) < marker.userData.radius + 6.5;
         if (game.luredCount >= 8 && insideValley) {
           setPhase(3, true);
-          showToast("הם רחוקים מן העיר. עכשיו הגיע הזמן לאות הכידון.");
+          showToast("הם רחוקים מהחומה. הגיע הזמן להרים את החרב (E).");
         }
       }
 
@@ -1320,17 +1578,16 @@ function initWorld() {
       titleCtx.lineCap = "round";
       const jx = w * .3;
       const jy = h * .62;
+      titleCtx.strokeStyle = "#e8c878";
+      titleCtx.lineWidth = 4;
+      titleCtx.lineCap = "round";
       titleCtx.beginPath();
-      titleCtx.moveTo(jx, jy);
-      titleCtx.lineTo(jx, jy - h * .32);
+      titleCtx.moveTo(jx + 14, jy - h * .08);
+      titleCtx.lineTo(jx + 14, jy - h * .34);
+      titleCtx.lineTo(jx + 38, jy - h * .5);
       titleCtx.stroke();
-      titleCtx.fillStyle = "#f5dfad";
-      titleCtx.beginPath();
-      titleCtx.moveTo(jx, jy - h * .38);
-      titleCtx.lineTo(jx - 10, jy - h * .3);
-      titleCtx.lineTo(jx + 10, jy - h * .3);
-      titleCtx.closePath();
-      titleCtx.fill();
+      titleCtx.fillStyle = "#e8c878";
+      titleCtx.fillRect(jx + 8, jy - h * .06, 12, 5);
       titleCtx.fillStyle = "#245b5c";
       titleCtx.fillRect(jx - 18, jy - h * .18, 36, h * .2);
       titleCtx.fillStyle = "#c9934a";
