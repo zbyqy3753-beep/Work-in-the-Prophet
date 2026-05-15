@@ -118,7 +118,10 @@ export const materials = {
   flameCore: new THREE.MeshStandardMaterial({ color: 0xffee80, emissive: 0xffcc00, emissiveIntensity: 3.5, roughness: .20 }),
   gold: new THREE.MeshStandardMaterial({ color: 0xe8be40, emissive: 0x8a6c10, emissiveIntensity: .45, roughness: .42, metalness: .28 }),
   plume: new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: .80, metalness: 0 }),
-  plumeIsrael: new THREE.MeshStandardMaterial({ color: 0x2255cc, roughness: .80, metalness: 0 })
+  plumeIsrael: new THREE.MeshStandardMaterial({ color: 0x2255cc, roughness: .80, metalness: 0 }),
+  metalPlate: new THREE.MeshStandardMaterial({ color: 0x9a9590, roughness: .55, metalness: .52 }),
+  bronzeHelmet: new THREE.MeshStandardMaterial({ color: 0xc89448, roughness: .42, metalness: .50 }),
+  bronzeHelmetDark: new THREE.MeshStandardMaterial({ color: 0x7a5828, roughness: .58, metalness: .40 })
 };
 
 export const groups = {
@@ -136,7 +139,7 @@ Object.values(groups).forEach(group => scene.add(group));
 export const player = {
   group: null,
   body: null,
-  spear: null,
+  sword: null,
   mantle: null,
   cursor: null,
   position: new THREE.Vector3(0, 0, 60),
@@ -145,7 +148,7 @@ export const player = {
   speed: 16,
   targetYaw: Math.PI,
   bob: 0,
-  spearRaised: 0,
+  swordRaised: 0,
   attackSwing: 0
 };
 
@@ -1173,7 +1176,7 @@ function makeCharacter(options = {}) {
     sash = materials.bronze,
     head = 0xc79358,
     scale = 1,
-    spear = true,
+    weapon = true,
     shield = true,
     headdress = true,
     faction = "israel",
@@ -1565,49 +1568,60 @@ function makeCharacter(options = {}) {
   parts.armL = armL;
   parts.armR = armR;
 
-  // ── SPEAR ─────────────────────────────────────────────────────
-  if (spear) {
-    const spearGroup = new THREE.Group();
+  // ── חרב / כלי קרב תקופתי ─────────────────────────────────────
+  if (weapon) {
+    const swordGroup = new THREE.Group();
+    const bladeMat = faction === "ai" ? materials.ironMat : materials.bronzeBright;
+    const guardMat = faction === "ai" ? materials.darkBronze : materials.bronzeBright;
 
-    // Main shaft – slightly tapered wood pole
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.028, .038, 4.5, 10), materials.wood);
-    shaft.position.y = 2.1;
-    shaft.castShadow = true;
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(.034, .038, .36, 8), materials.leather);
+    grip.position.y = .18;
+    grip.castShadow = true;
 
-    // Bronze leaf-blade tip
-    const blade = new THREE.Mesh(new THREE.ConeGeometry(.065, .72, 8), materials.bronzeBright);
-    blade.position.y = 4.58;
-    blade.castShadow = true;
-
-    // Blade socket / collar
-    const socket = new THREE.Mesh(new THREE.CylinderGeometry(.052, .038, .20, 10), materials.bronzeHelmetDark);
-    socket.position.y = 4.26;
-
-    // Crossguard / rivets at grip
-    const crossGuard = new THREE.Mesh(new THREE.TorusGeometry(.06, .015, 6, 12), materials.bronzeBright);
-    crossGuard.position.y = 1.38;
-    crossGuard.rotation.x = Math.PI / 2;
-
-    // Butt spike
-    const butt = new THREE.Mesh(new THREE.ConeGeometry(.055, .28, 8), materials.darkBronze);
-    butt.position.y = -.24;
-    butt.rotation.x = Math.PI;
-
-    // Leather grip wrapping
-    for (let i = 0; i < 6; i++) {
-      const wrap = new THREE.Mesh(new THREE.TorusGeometry(.042, .012, 6, 10), materials.leather);
-      wrap.position.y = 1.1 + i * .085;
+    for (let i = 0; i < 5; i++) {
+      const wrap = new THREE.Mesh(new THREE.TorusGeometry(.038, .01, 6, 10), materials.leatherDark);
+      wrap.position.y = .06 + i * .065;
       wrap.rotation.x = Math.PI / 2;
-      spearGroup.add(wrap);
+      swordGroup.add(wrap);
     }
 
-    spearGroup.add(shaft, blade, socket, crossGuard, butt);
-    spearGroup.position.set(.80, .18, .18);
-    spearGroup.rotation.z = -.10;
-    spearGroup.rotation.x = .035;
-    spearGroup.userData.shaft = shaft;
-    group.add(spearGroup);
-    parts.spear = spearGroup;
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(.24, .045, .07), guardMat);
+    guard.position.y = .38;
+    guard.castShadow = true;
+
+    const pommel = new THREE.Mesh(new THREE.SphereGeometry(.055, 10, 8), materials.darkBronze);
+    pommel.position.y = -.02;
+    pommel.castShadow = true;
+
+    if (faction === "ai") {
+      const khopesh = new THREE.Mesh(new THREE.BoxGeometry(.09, .62, .13), bladeMat);
+      khopesh.position.set(.05, .72, 0);
+      khopesh.rotation.z = -.62;
+      khopesh.castShadow = true;
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(.07, .22, .1), bladeMat);
+      tip.position.set(.22, .98, 0);
+      tip.rotation.z = -.35;
+      tip.castShadow = true;
+      swordGroup.add(khopesh, tip);
+    } else {
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(.075, .78, .11), bladeMat);
+      blade.position.y = .78;
+      blade.castShadow = true;
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(.05, .18, .09), bladeMat);
+      tip.position.y = 1.16;
+      tip.rotation.z = .08;
+      tip.castShadow = true;
+      const fuller = new THREE.Mesh(new THREE.BoxGeometry(.02, .5, .04), materials.bronzeHelmetDark);
+      fuller.position.set(0, .75, .04);
+      swordGroup.add(blade, tip, fuller);
+    }
+
+    swordGroup.add(grip, guard, pommel);
+    swordGroup.position.set(.76, 1.0, .24);
+    swordGroup.rotation.z = -.38;
+    swordGroup.rotation.x = .06;
+    group.add(swordGroup);
+    parts.sword = swordGroup;
   }
 
   // ── SHIELD ─────────────────────────────────────────────────────
@@ -1716,7 +1730,7 @@ function createPlayer() {
     robe: materials.israelBlue,
     sash: materials.gold,
     scale: 1.17,
-    spear: true,
+    weapon: true,
     shield: true,
     faction: "israel",
     playerAvatar: true
@@ -1732,7 +1746,7 @@ function createPlayer() {
   });
   player.group = group;
   player.body = group.userData.body;
-  player.spear = group.userData.spear;
+  player.sword = group.userData.sword;
   player.mantle = null;
   group.visible = false;
   group.traverse(obj => {
@@ -1770,7 +1784,7 @@ function createPlayer() {
 }
 
 function createCaptain(x, z, name, homeTent = null) {
-  const group = makeCharacter({ robe: materials.israelDeep, sash: materials.gold, scale: 1.08, spear: true, shield: true, faction: "israel" });
+  const group = makeCharacter({ robe: materials.israelDeep, sash: materials.gold, scale: 1.08, weapon: true, shield: true, faction: "israel" });
   const y = homeTent ? homeTent.position.y + 0.09 : groundY(x, z);
   group.position.set(x, y, z);
   group.rotation.y = homeTent ? homeTent.rotation.y + Math.PI : Math.random() * TAU;
@@ -1800,7 +1814,7 @@ function createCaptain(x, z, name, homeTent = null) {
 }
 
 function createAlly(x, z, ambush = false) {
-  const group = makeCharacter({ robe: ambush ? materials.israelDeep : materials.israelBlue, sash: materials.bronze, scale: .88 + Math.random() * .12, spear: true, shield: true, faction: "israel" });
+  const group = makeCharacter({ robe: ambush ? materials.israelDeep : materials.israelBlue, sash: materials.bronze, scale: .88 + Math.random() * .12, weapon: true, shield: true, faction: "israel" });
   group.position.set(x, groundY(x, z), z);
   group.rotation.y = Math.random() * TAU;
   group.userData = {
@@ -1821,7 +1835,7 @@ function createAlly(x, z, ambush = false) {
 }
 
 function createEnemy(x, z, state = "guard") {
-  const group = makeCharacter({ robe: Math.random() > .45 ? materials.aiRed : materials.aiDark, sash: materials.darkBronze, scale: .87 + Math.random() * .12, spear: true, shield: true, headdress: Math.random() > .28, faction: "ai" });
+  const group = makeCharacter({ robe: Math.random() > .45 ? materials.aiRed : materials.aiDark, sash: materials.darkBronze, scale: .87 + Math.random() * .12, weapon: true, shield: true, headdress: Math.random() > .28, faction: "ai" });
   group.position.set(x, groundY(x, z), z);
   group.rotation.y = Math.random() * TAU;
   group.userData = {
@@ -1989,3 +2003,6 @@ export function buildWorld() {
   createMarkers();
   createSmokeColumn(18, -56, 14);
 }
+
+
+s
