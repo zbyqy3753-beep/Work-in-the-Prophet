@@ -2003,6 +2003,3 @@ export function buildWorld() {
   createMarkers();
   createSmokeColumn(18, -56, 14);
 }
-
-
-s
