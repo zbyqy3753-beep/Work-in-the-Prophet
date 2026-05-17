@@ -40,6 +40,7 @@ const continueStoryButton = document.getElementById("continueStory");
 const hideStoryButton = document.getElementById("hideStory");
 const storyCard = document.getElementById("storyCard");
 const storyTitle = document.getElementById("storyTitle");
+const story3dCanvas = document.getElementById("story3dCanvas");
 const storySceneCanvas = document.getElementById("storySceneCanvas");
 const storyCaptionEl = document.getElementById("storyCaption");
 const storyBodySr = document.getElementById("storyBodySr");
@@ -48,6 +49,10 @@ const cinemaTimeEl = document.getElementById("cinemaTime");
 const cinemaSceneTag = document.getElementById("cinemaSceneTag");
 const cinemaProgressBar = document.getElementById("cinemaProgressBar");
 const STORY_SHOT_SEC = 5.4;
+const MOUSE_LOOK_X = 0.0019;
+const MOUSE_LOOK_Y = 0.00145;
+const DRAG_LOOK_X = 0.0022;
+const DRAG_LOOK_Y = 0.0017;
 const storyKicker = document.getElementById("storyKicker");
 const phaseTitle = document.getElementById("phaseTitle");
 const phaseText = document.getElementById("phaseText");
@@ -168,6 +173,8 @@ const game = {
   storyCaptionTimer: 0,
   cinemaTime: 0,
   cinemaShotFade: 1,
+  cinemaBeatFlash: 0,
+  cinemaPulse: 0,
   storyCaptionLock: false,
   health: 100,
   morale: 92,
@@ -179,6 +186,7 @@ const game = {
   battleWon: false,
   isGameOver: false,
   attackCooldown: 0,
+  attackCombo: 0,
   interactCooldown: 0,
   tentInteractCooldown: 0,
   sprintEnergy: 100,
@@ -192,7 +200,9 @@ const game = {
   cameraYaw: 0,
   cameraPitch: 0,
   targetCameraYaw: 0,
-  targetCameraPitch: 0
+  targetCameraPitch: 0,
+  storyCameraYaw: 0,
+  storyCameraPitch: 0
 };
 
 const keys = new Set();
@@ -201,6 +211,25 @@ const tmpVec = new THREE.Vector3();
 const tmpVec2 = new THREE.Vector3();
 const tmpQuat = new THREE.Quaternion();
 const tmpEuler = new THREE.Euler();
+
+let storyAudio = null;
+let appAudio = null;
+const story3D = {
+  renderer: null,
+  scene: null,
+  camera: null,
+  root: null,
+  soldiers: [],
+  smoke: [],
+  embers: [],
+  rings: [],
+  fireLights: [],
+  sword: null,
+  city: null,
+  phase: -1,
+  width: 0,
+  height: 0
+};
 
 
 function initWorld() {
@@ -254,15 +283,16 @@ function initWorld() {
     }
 
     function layoutStoryCanvas() {
-      if (!storySceneCanvas) return;
+      if (!storySceneCanvas && !story3dCanvas) return;
       const rect = (storyCard || storyCinematic).getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const pw = Math.max(2, Math.floor(rect.width * dpr));
       const ph = Math.max(2, Math.floor(rect.height * dpr));
-      if (storySceneCanvas.width !== pw || storySceneCanvas.height !== ph) {
+      if (storySceneCanvas && (storySceneCanvas.width !== pw || storySceneCanvas.height !== ph)) {
         storySceneCanvas.width = pw;
         storySceneCanvas.height = ph;
       }
+      resizeStory3D(rect.width, rect.height);
     }
 
     function formatCinemaClock(sec) {
@@ -270,6 +300,682 @@ function initWorld() {
       const m = Math.floor(s / 60);
       const r = s % 60;
       return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+    }
+
+    function easeOutCubic(x) {
+      return 1 - Math.pow(1 - clamp(x, 0, 1), 3);
+    }
+
+    function easeInOutSine(x) {
+      return -(Math.cos(Math.PI * clamp(x, 0, 1)) - 1) / 2;
+    }
+
+    function seededNoise(seed) {
+      return Math.sin(seed * 12.9898) * 43758.5453 % 1;
+    }
+
+    function makeStoryMat(color, options = {}) {
+      return new THREE.MeshStandardMaterial({
+        color,
+        roughness: options.roughness ?? 0.74,
+        metalness: options.metalness ?? 0.05,
+        emissive: options.emissive ?? 0x000000,
+        emissiveIntensity: options.emissiveIntensity ?? 0,
+        transparent: options.opacity !== undefined,
+        opacity: options.opacity ?? 1,
+        depthWrite: options.depthWrite ?? (options.opacity === undefined)
+      });
+    }
+
+    function disposeStoryObject(obj) {
+      obj.traverse(child => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach(mat => mat.dispose && mat.dispose());
+        }
+      });
+    }
+
+    function initStory3D() {
+      if (!story3dCanvas) return false;
+      if (story3D.renderer) return true;
+      story3D.renderer = new THREE.WebGLRenderer({
+        canvas: story3dCanvas,
+        alpha: true,
+        antialias: true,
+        powerPreference: "high-performance"
+      });
+      story3D.renderer.setClearColor(0x000000, 0);
+      story3D.renderer.setPixelRatio(MAX_PIXEL_RATIO);
+      if (THREE.SRGBColorSpace) story3D.renderer.outputColorSpace = THREE.SRGBColorSpace;
+      story3D.scene = new THREE.Scene();
+      story3D.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 220);
+
+      const hemi = new THREE.HemisphereLight(0xffdfb8, 0x130a05, 1.25);
+      const key = new THREE.DirectionalLight(0xffd08a, 2.4);
+      key.position.set(-18, 28, 22);
+      const rim = new THREE.DirectionalLight(0x8fd6ff, 0.75);
+      rim.position.set(22, 16, -26);
+      story3D.scene.add(hemi, key, rim);
+      return true;
+    }
+
+    function resizeStory3D(cssW, cssH) {
+      if (!story3D.renderer || !story3D.camera || cssW < 4 || cssH < 4) return;
+      if (story3D.width !== cssW || story3D.height !== cssH) {
+        story3D.width = cssW;
+        story3D.height = cssH;
+        story3D.renderer.setPixelRatio(MAX_PIXEL_RATIO);
+        story3D.renderer.setSize(cssW, cssH, false);
+        story3D.camera.aspect = cssW / cssH;
+        story3D.camera.updateProjectionMatrix();
+      }
+    }
+
+    function createStoryCity(mat, glowMat, pha) {
+      const group = new THREE.Group();
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(16, 8, 5), mat);
+      wall.position.set(0, 4, 0);
+      group.add(wall);
+      for (let i = 0; i < 4; i++) {
+        const tower = new THREE.Mesh(new THREE.BoxGeometry(2.4, 11 + i % 2 * 3, 2.8), mat);
+        tower.position.set(-7 + i * 4.7, 7, -1.5);
+        group.add(tower);
+      }
+      for (let i = 0; i < 12; i++) {
+        const light = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.7, 0.08), glowMat);
+        light.position.set(-6.5 + (i % 6) * 2.4, 4.8 + Math.floor(i / 6) * 1.7, 2.54);
+        group.add(light);
+      }
+      group.position.set(24, 0, -18);
+      group.rotation.y = -0.28;
+      group.scale.setScalar(pha === 3 ? 1.18 : 1);
+      return group;
+    }
+
+    function createStoryTent(mat, x, z, scale = 1) {
+      const group = new THREE.Group();
+      const tent = new THREE.Mesh(new THREE.ConeGeometry(2.8 * scale, 4.6 * scale, 4), mat);
+      tent.rotation.y = Math.PI / 4;
+      tent.scale.z = 1.25;
+      tent.position.y = 2.3 * scale;
+      const flap = new THREE.Mesh(new THREE.BoxGeometry(1.1 * scale, 2.4 * scale, 0.08), makeStoryMat(0x1b1009, { opacity: 0.68 }));
+      flap.position.set(0, 1.5 * scale, 2.48 * scale);
+      group.add(tent, flap);
+      group.position.set(x, 0, z);
+      return group;
+    }
+
+    function createStorySoldier(mat, accentMat, scale = 1) {
+      const group = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.42 * scale, 0.55 * scale, 1.9 * scale, 8), mat);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.42 * scale, 10, 8), accentMat);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(1.35 * scale, 0.18 * scale, 0.18 * scale), mat);
+      const spear = new THREE.Mesh(new THREE.CylinderGeometry(0.035 * scale, 0.035 * scale, 2.8 * scale, 6), accentMat);
+      body.position.y = 0.95 * scale;
+      head.position.y = 2.12 * scale;
+      arm.position.set(0.55 * scale, 1.38 * scale, 0);
+      spear.position.set(1.35 * scale, 1.48 * scale, 0);
+      spear.rotation.z = 0.22;
+      group.add(body, head, arm, spear);
+      return group;
+    }
+
+    function createStorySword() {
+      const group = new THREE.Group();
+      const bladeMat = makeStoryMat(0xfff0b8, {
+        metalness: 0.55,
+        roughness: 0.2,
+        emissive: 0xffc45c,
+        emissiveIntensity: 1.2
+      });
+      const hiltMat = makeStoryMat(0x5a2f16, { roughness: 0.55, metalness: 0.2 });
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.38, 9.2, 0.12), bladeMat);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.36, 1.1, 4), bladeMat);
+      const hilt = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.34, 0.34), hiltMat);
+      const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 2.1, 10), hiltMat);
+      blade.position.y = 4.5;
+      tip.position.y = 9.6;
+      hilt.position.y = 0.25;
+      grip.position.y = -0.9;
+      group.add(blade, tip, hilt, grip);
+      group.position.set(-18, 0.3, 7);
+      group.rotation.set(0.18, -0.25, -0.58);
+      const glow = new THREE.PointLight(0xffd47a, 5.2, 48, 1.8);
+      glow.position.set(0, 8.5, 0);
+      group.add(glow);
+      story3D.sword = group;
+      return group;
+    }
+
+    function createStorySmoke(mat, x, z, i, hot = false) {
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(1.2 + (i % 4) * 0.5, 12, 8), mat);
+      puff.position.set(x + Math.sin(i * 1.7) * 3.2, 4 + i * 0.45, z + Math.cos(i * 1.1) * 1.6);
+      puff.scale.set(1.3, hot ? 1.7 : 1.25, 1.1);
+      puff.userData.baseY = puff.position.y;
+      puff.userData.speed = hot ? 1.8 + i * 0.05 : 0.9 + i * 0.03;
+      story3D.smoke.push(puff);
+      return puff;
+    }
+
+    function createStoryRing(mat, i) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(2.2 + i * 0.55, 0.035, 8, 64), mat.clone());
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(-14.1, 8.8, 4.4);
+      ring.userData.offset = i * 0.22;
+      story3D.rings.push(ring);
+      return ring;
+    }
+
+    function buildStory3DScene(pha) {
+      if (!initStory3D()) return;
+      if (story3D.root) {
+        story3D.scene.remove(story3D.root);
+        disposeStoryObject(story3D.root);
+      }
+      story3D.root = new THREE.Group();
+      story3D.soldiers = [];
+      story3D.smoke = [];
+      story3D.embers = [];
+      story3D.rings = [];
+      story3D.fireLights = [];
+      story3D.sword = null;
+      story3D.city = null;
+      story3D.phase = pha;
+      story3D.scene.add(story3D.root);
+
+      const theme = cinemaTheme(pha);
+      const sandMat = makeStoryMat(theme.sand0, { opacity: 0.72, roughness: 0.95 });
+      const darkMat = makeStoryMat(0x130c08, { roughness: 0.88 });
+      const soldierMat = makeStoryMat(pha === 5 ? 0x234f57 : 0x11100d, { roughness: 0.82 });
+      const accentMat = makeStoryMat(0xd19a4a, { emissive: 0x5a2a0a, emissiveIntensity: 0.12 });
+      const cityMat = makeStoryMat(0x2d2118, { opacity: pha === 0 ? 0.62 : 0.86, roughness: 0.9 });
+      const glowMat = makeStoryMat(pha === 4 ? 0xff6b22 : 0xffc46a, {
+        emissive: pha === 4 ? 0xff4a13 : 0xffa540,
+        emissiveIntensity: pha === 4 ? 1.8 : 0.85
+      });
+      const smokeMat = makeStoryMat(pha === 4 ? 0x6b4531 : 0x9f9486, {
+        opacity: pha === 4 ? 0.46 : 0.28,
+        roughness: 1,
+        depthWrite: false
+      });
+
+      const ground = new THREE.Mesh(new THREE.PlaneGeometry(170, 110, 1, 1), sandMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.set(0, -0.05, -4);
+      story3D.root.add(ground);
+
+      for (let i = 0; i < 7; i++) {
+        const mountain = new THREE.Mesh(new THREE.ConeGeometry(7 + i % 3 * 2, 12 + i % 2 * 4, 4), darkMat);
+        mountain.position.set(-48 + i * 16, 5.6, -42 - (i % 2) * 7);
+        mountain.rotation.y = Math.PI / 4 + i * 0.04;
+        mountain.scale.z = 0.55;
+        story3D.root.add(mountain);
+      }
+
+      story3D.city = createStoryCity(cityMat, glowMat, pha);
+      story3D.root.add(story3D.city);
+
+      if (pha === 0) {
+        [-22, -10, 2].forEach((x, i) => story3D.root.add(createStoryTent(makeStoryMat(0x342115), x, -1 + i * 1.4, 1 + i * 0.08)));
+      }
+
+      const soldierCount = [14, 10, 20, 8, 18, 12][pha] || 10;
+      for (let i = 0; i < soldierCount; i++) {
+        const soldier = createStorySoldier(soldierMat, accentMat, 0.85 + (i % 3) * 0.08);
+        const row = Math.floor(i / 7);
+        const col = i % 7;
+        let x = -28 + col * 5.2 + row * 1.4;
+        let z = 7 + row * 4.2;
+        if (pha === 1) {
+          x = -34 + col * 4.8;
+          z = -5 + row * 3.4 + Math.sin(i) * 1.1;
+        } else if (pha === 2) {
+          x = -42 + col * 7.2;
+          z = 11 + row * 5.4;
+          soldier.userData.runDir = i % 2 ? -1 : 1;
+          soldier.userData.runSpeed = 10 + (i % 5) * 1.6;
+        } else if (pha === 3) {
+          x = 4 + col * 3.6;
+          z = -8 + row * 3.2;
+        } else if (pha === 4) {
+          x = -34 + col * 6.4;
+          z = 8 + row * 4.8;
+          soldier.userData.runDir = i % 2 ? -1 : 1;
+          soldier.userData.runSpeed = 7 + (i % 6) * 1.2;
+        } else if (pha === 5) {
+          x = -24 + col * 5.5;
+          z = 3 + row * 4.4;
+        }
+        soldier.position.set(x, 0, z);
+        soldier.rotation.y = pha === 2 || pha === 4 ? (soldier.userData.runDir > 0 ? Math.PI / 2 : -Math.PI / 2) : -0.08;
+        soldier.userData.baseX = x;
+        soldier.userData.baseZ = z;
+        soldier.userData.phaseOffset = i * 0.73;
+        story3D.soldiers.push(soldier);
+        story3D.root.add(soldier);
+      }
+
+      if (pha === 3) {
+        story3D.root.add(createStorySword());
+        const ringMat = makeStoryMat(0xffd976, {
+          opacity: 0.5,
+          emissive: 0xffbf47,
+          emissiveIntensity: 1.5,
+          depthWrite: false
+        });
+        for (let i = 0; i < 4; i++) story3D.root.add(createStoryRing(ringMat, i));
+      }
+
+      if (pha >= 4) {
+        for (let i = 0; i < 12; i++) story3D.root.add(createStorySmoke(smokeMat, 24, -18, i, pha === 4));
+        for (let i = 0; i < 28; i++) {
+          const ember = new THREE.Mesh(new THREE.SphereGeometry(0.12 + (i % 3) * 0.04, 6, 4), glowMat);
+          ember.position.set(14 + Math.sin(i * 2.2) * 14, 1 + (i % 8), -14 + Math.cos(i * 1.8) * 5);
+          ember.userData.baseY = ember.position.y;
+          ember.userData.speed = 2 + (i % 6) * 0.45;
+          story3D.embers.push(ember);
+          story3D.root.add(ember);
+        }
+        for (let i = 0; i < 3; i++) {
+          const light = new THREE.PointLight(0xff6a24, 2.5, 28, 1.6);
+          light.position.set(18 + i * 5, 3.8, -11 + i % 2 * 2);
+          story3D.fireLights.push(light);
+          story3D.root.add(light);
+        }
+      } else if (pha === 5) {
+        for (let i = 0; i < 7; i++) story3D.root.add(createStorySmoke(smokeMat, 24, -18, i, false));
+      }
+    }
+
+    function story3DCameraPose(pha, shot, breath) {
+      const poses = [
+        { pos: [-8, 14, 45], target: [2, 2, -11], fov: 41 },
+        { pos: [-24, 10, 38], target: [5, 2, -16], fov: 38 },
+        { pos: [-35, 8, 31], target: [-3, 2, 5], fov: 46 },
+        { pos: [-22, 11, 24], target: [-12, 6, 2], fov: 37 },
+        { pos: [-12, 13, 37], target: [14, 5, -14], fov: 44 },
+        { pos: [-6, 16, 43], target: [4, 4, -15], fov: 40 }
+      ][clamp(pha, 0, 5)];
+      const shotDir = shot % 2 === 0 ? 1 : -1;
+      return {
+        pos: [
+          poses.pos[0] + shotDir * breath * 4.5,
+          poses.pos[1] + Math.sin(breath * Math.PI) * 1.4,
+          poses.pos[2] - breath * 3.5
+        ],
+        target: [
+          poses.target[0] + shotDir * breath * 2.8,
+          poses.target[1] + (shot - 1) * 0.8,
+          poses.target[2]
+        ],
+        fov: poses.fov - breath * 2.2
+      };
+    }
+
+    function renderStory3D(rawDt, cssW, cssH, pha, shot, shotProgress, breath) {
+      if (!initStory3D()) return;
+      resizeStory3D(cssW, cssH);
+      if (story3D.phase !== pha || !story3D.root) buildStory3DScene(pha);
+      if (!story3D.root || !story3D.camera) return;
+
+      const t = game.visualTime;
+      const cameraPose = story3DCameraPose(pha, shot, breath);
+      const shake = game.cinemaPulse * (pha >= 2 && pha <= 4 ? 0.6 : 0.18);
+      story3D.camera.position.set(
+        cameraPose.pos[0] + Math.sin(t * 17) * shake,
+        cameraPose.pos[1] + Math.cos(t * 13) * shake * 0.4,
+        cameraPose.pos[2] + Math.cos(t * 15) * shake
+      );
+      story3D.camera.fov = cameraPose.fov;
+      story3D.camera.updateProjectionMatrix();
+      story3D.camera.lookAt(cameraPose.target[0], cameraPose.target[1], cameraPose.target[2]);
+
+      story3D.root.rotation.y = Math.sin(t * 0.18 + pha) * 0.045 + (shotProgress - 0.5) * 0.035;
+      story3D.root.position.y = -1.4 + Math.sin(t * 0.7) * 0.08;
+
+      story3D.soldiers.forEach((soldier, i) => {
+        const run = soldier.userData.runSpeed || 0;
+        const offset = soldier.userData.phaseOffset || 0;
+        soldier.position.y = Math.abs(Math.sin(t * (run ? 9 : 4.2) + offset)) * (run ? 0.36 : 0.12);
+        soldier.rotation.z = Math.sin(t * (run ? 8.4 : 3.2) + offset) * (run ? 0.13 : 0.045);
+        if (run) {
+          const travel = ((t * run + i * 4.2) % 70) - 35;
+          soldier.position.x = soldier.userData.baseX + travel * (soldier.userData.runDir || 1) * 0.22;
+        }
+      });
+
+      story3D.smoke.forEach((puff, i) => {
+        const rise = (t * puff.userData.speed + i * 0.9) % 8;
+        puff.position.y = puff.userData.baseY + rise;
+        puff.position.x += Math.sin(t * 0.8 + i) * rawDt * 0.7;
+        puff.material.opacity = (pha === 4 ? 0.4 : 0.24) * (1 - rise / 10);
+        puff.scale.setScalar(1.1 + rise * 0.11 + Math.sin(t + i) * 0.08);
+      });
+
+      story3D.embers.forEach((ember, i) => {
+        const rise = (t * ember.userData.speed + i) % 9;
+        ember.position.y = ember.userData.baseY + rise;
+        ember.position.x += Math.sin(t * 2 + i) * rawDt * 1.2;
+        ember.scale.setScalar(0.7 + Math.sin(t * 6 + i) * 0.25);
+      });
+
+      story3D.fireLights.forEach((light, i) => {
+        light.intensity = 2.2 + Math.sin(t * 7 + i) * 0.8 + game.cinemaBeatFlash * 1.2;
+      });
+
+      if (story3D.city) {
+        story3D.city.position.y = Math.sin(t * 0.6) * 0.1;
+        story3D.city.rotation.y = -0.28 + Math.sin(t * 0.22) * 0.025;
+      }
+
+      if (story3D.sword) {
+        story3D.sword.rotation.z = -0.58 + Math.sin(t * 2.6) * 0.04 - game.cinemaPulse * 0.08;
+        story3D.sword.scale.setScalar(1 + game.cinemaBeatFlash * 0.045);
+      }
+
+      story3D.rings.forEach((ring, i) => {
+        const p = (shotProgress + ring.userData.offset) % 1;
+        ring.scale.setScalar(0.7 + p * 3.2);
+        ring.material.opacity = (1 - p) * 0.42;
+        ring.rotation.z = t * 0.6 + i * 0.4;
+      });
+
+      story3D.renderer.render(story3D.scene, story3D.camera);
+    }
+
+    function makeNoiseBuffer(ctx, seconds = 2.4) {
+      const length = Math.max(1, Math.floor(ctx.sampleRate * seconds));
+      const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < length; i++) {
+        last = last * 0.94 + (Math.random() * 2 - 1) * 0.06;
+        data[i] = last;
+      }
+      return buffer;
+    }
+
+    function getAppAudioContext() {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return null;
+      if (!appAudio) {
+        const ctx = new AudioCtx();
+        const master = ctx.createGain();
+        master.gain.value = 0.72;
+        master.connect(ctx.destination);
+        appAudio = { ctx, master, unlocked: false };
+      }
+      if (appAudio.ctx.state === "suspended") appAudio.ctx.resume().catch(() => {});
+      appAudio.unlocked = true;
+      return appAudio.ctx;
+    }
+
+    function unlockAllAudio() {
+      getAppAudioContext();
+      getStoryAudioContext();
+    }
+
+    function playSfxTone(freq, duration, volume, type = "sine", endFreq = null, delay = 0) {
+      if (!getAppAudioContext() || !appAudio) return;
+      const ctx = appAudio.ctx;
+      const t = ctx.currentTime + delay;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, t);
+      if (endFreq) osc.frequency.exponentialRampToValueAtTime(Math.max(1, endFreq), t + duration);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(volume, t + Math.min(0.025, duration * 0.2));
+      gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+      osc.connect(gain).connect(appAudio.master);
+      osc.start(t);
+      osc.stop(t + duration + 0.04);
+    }
+
+    function playSfxNoise(duration, volume, freq = 900, q = 1.1, type = "bandpass", delay = 0) {
+      if (!getAppAudioContext() || !appAudio) return;
+      const ctx = appAudio.ctx;
+      const t = ctx.currentTime + delay;
+      const src = ctx.createBufferSource();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+      src.buffer = makeNoiseBuffer(ctx, duration + 0.08);
+      filter.type = type;
+      filter.frequency.setValueAtTime(freq, t);
+      filter.Q.value = q;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(volume, t + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+      src.connect(filter).connect(gain).connect(appAudio.master);
+      src.start(t);
+      src.stop(t + duration + 0.08);
+    }
+
+    function playUiSfx(kind = "click") {
+      if (kind === "start") {
+        playSfxTone(120, 0.28, 0.12, "triangle", 62);
+        playSfxTone(420, 0.24, 0.05, "sine", 720, 0.05);
+        playSfxNoise(0.22, 0.04, 850, 0.8, "bandpass", 0.02);
+      } else if (kind === "signal") {
+        playSfxTone(220, 0.55, 0.14, "triangle", 88);
+        playSfxTone(880, 0.45, 0.08, "sine", 1420, 0.03);
+        playSfxNoise(0.42, 0.06, 2100, 3.5, "bandpass", 0.04);
+      } else {
+        playSfxTone(260, 0.09, 0.035, "sine", 180);
+      }
+    }
+
+    function playAttackSfx(hit = false, combo = 0) {
+      const lift = combo % 2 ? 1.12 : 1;
+      playSfxNoise(0.14, hit ? 0.115 : 0.075, 1500 * lift, 2.8, "bandpass");
+      playSfxTone(190 * lift, 0.16, 0.05, "triangle", 90 * lift);
+      if (hit) {
+        playSfxNoise(0.12, 0.14, 320, 1.4, "lowpass", 0.03);
+        playSfxTone(86, 0.2, 0.08, "sine", 48, 0.02);
+        playSfxTone(680, 0.08, 0.045, "square", 380, 0.035);
+      }
+    }
+
+    function getStoryAudioContext() {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return null;
+      if (!storyAudio) {
+        const ctx = new AudioCtx();
+        const master = ctx.createGain();
+        const drone = ctx.createOscillator();
+        const low = ctx.createOscillator();
+        const noise = ctx.createBufferSource();
+        const droneGain = ctx.createGain();
+        const lowGain = ctx.createGain();
+        const noiseGain = ctx.createGain();
+        const noiseFilter = ctx.createBiquadFilter();
+        const pulseGain = ctx.createGain();
+        const pulseFilter = ctx.createBiquadFilter();
+
+        master.gain.value = 0;
+        drone.type = "sawtooth";
+        low.type = "sine";
+        noise.buffer = makeNoiseBuffer(ctx);
+        noise.loop = true;
+        noiseFilter.type = "bandpass";
+        noiseFilter.frequency.value = 700;
+        noiseFilter.Q.value = 0.7;
+        pulseFilter.type = "lowpass";
+        pulseFilter.frequency.value = 1200;
+
+        droneGain.gain.value = 0.018;
+        lowGain.gain.value = 0.02;
+        noiseGain.gain.value = 0.028;
+        pulseGain.gain.value = 0;
+
+        drone.connect(droneGain).connect(master);
+        low.connect(lowGain).connect(master);
+        noise.connect(noiseFilter).connect(noiseGain).connect(master);
+        pulseGain.connect(pulseFilter).connect(master);
+        master.connect(ctx.destination);
+        drone.start();
+        low.start();
+        noise.start();
+
+        storyAudio = {
+          ctx,
+          master,
+          drone,
+          low,
+          noiseFilter,
+          noiseGain,
+          pulseGain,
+          pulseFilter,
+          phase: -1,
+          targetVolume: 0,
+          nextTextureTime: 0
+        };
+      }
+      if (storyAudio.ctx.state === "suspended") storyAudio.ctx.resume().catch(() => {});
+      return storyAudio.ctx;
+    }
+
+    function storyAudioTheme(pha) {
+      return [
+        { drone: 92, low: 46, wind: 620, noise: 0.038, volume: 0.44 },
+        { drone: 76, low: 38, wind: 980, noise: 0.048, volume: 0.42 },
+        { drone: 118, low: 58, wind: 1320, noise: 0.068, volume: 0.5 },
+        { drone: 145, low: 72, wind: 760, noise: 0.044, volume: 0.56 },
+        { drone: 64, low: 34, wind: 390, noise: 0.09, volume: 0.58 },
+        { drone: 104, low: 52, wind: 840, noise: 0.034, volume: 0.43 }
+      ][clamp(pha, 0, 5)];
+    }
+
+    function setStoryAudioTheme(pha, immediate = false) {
+      if (!getStoryAudioContext() || !storyAudio) return;
+      const ctx = storyAudio.ctx;
+      const theme = storyAudioTheme(pha);
+      const t = ctx.currentTime;
+      const ramp = immediate ? 0.03 : 0.7;
+      storyAudio.drone.frequency.cancelScheduledValues(t);
+      storyAudio.low.frequency.cancelScheduledValues(t);
+      storyAudio.noiseFilter.frequency.cancelScheduledValues(t);
+      storyAudio.noiseGain.gain.cancelScheduledValues(t);
+      storyAudio.drone.frequency.setTargetAtTime(theme.drone, t, ramp);
+      storyAudio.low.frequency.setTargetAtTime(theme.low, t, ramp);
+      storyAudio.noiseFilter.frequency.setTargetAtTime(theme.wind, t, ramp);
+      storyAudio.noiseGain.gain.setTargetAtTime(theme.noise, t, ramp);
+      storyAudio.targetVolume = theme.volume;
+      storyAudio.phase = pha;
+      storyAudio.nextTextureTime = t + 0.2;
+    }
+
+    function playStoryTone(freq, duration, volume, type = "sine", start = 0, endFreq = null) {
+      if (!storyAudio) return;
+      const ctx = storyAudio.ctx;
+      const t = ctx.currentTime + start;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, t);
+      if (endFreq) osc.frequency.exponentialRampToValueAtTime(endFreq, t + duration);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(volume, t + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+      osc.connect(gain).connect(storyAudio.master);
+      osc.start(t);
+      osc.stop(t + duration + 0.04);
+    }
+
+    function playStoryNoise(start, duration, volume, freq, q = 0.85, type = "bandpass") {
+      if (!storyAudio) return;
+      const ctx = storyAudio.ctx;
+      const t = ctx.currentTime + start;
+      const src = ctx.createBufferSource();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+      src.buffer = makeNoiseBuffer(ctx, duration + 0.16);
+      filter.type = type;
+      filter.frequency.setValueAtTime(freq, t);
+      filter.Q.value = q;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(volume, t + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+      src.connect(filter).connect(gain).connect(storyAudio.master);
+      src.start(t);
+      src.stop(t + duration + 0.12);
+    }
+
+    function playStoryTexture(kind = "ambient") {
+      if (!storyAudio) return;
+      const pha = game.phase;
+      if (kind === "shot") {
+        playStoryNoise(0.02, 0.36, 0.055, pha === 4 ? 420 : 950, 1.1);
+        playStoryTone(pha === 3 ? 620 : 220, 0.32, pha === 3 ? 0.07 : 0.035, pha === 3 ? "triangle" : "sine", 0.02, pha === 3 ? 1240 : 120);
+      }
+      if (pha === 2) {
+        for (let i = 0; i < 4; i++) playStoryNoise(i * 0.13, 0.08, 0.05, 180 + i * 28, 1.8, "lowpass");
+      } else if (pha === 3) {
+        playStoryTone(880, 0.42, 0.045, "sine", 0.04, 1480);
+        playStoryNoise(0.05, 0.28, 0.035, 2100, 4.2);
+      } else if (pha === 4) {
+        for (let i = 0; i < 5; i++) playStoryNoise(i * 0.07, 0.06, 0.035 + i * 0.004, 520 + i * 180, 2.4);
+        playStoryTone(54, 0.38, 0.055, "triangle", 0.02, 38);
+      } else if (pha === 1) {
+        playStoryNoise(0, 0.38, 0.035, 1450, 1.3);
+        playStoryTone(72, 0.3, 0.028, "sine", 0.03, 54);
+      } else {
+        playStoryNoise(0, 0.55, 0.026, pha === 5 ? 920 : 720, 0.7);
+      }
+    }
+
+    function pulseStoryAudio(kind = "shot") {
+      if (!getStoryAudioContext() || !storyAudio) return;
+      const ctx = storyAudio.ctx;
+      const t = ctx.currentTime;
+      const pha = game.phase;
+      const isHeavy = kind === "open" || pha === 3 || pha === 4;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      osc.type = isHeavy ? "triangle" : "sine";
+      osc.frequency.setValueAtTime(isHeavy ? 92 : 180, t);
+      osc.frequency.exponentialRampToValueAtTime(isHeavy ? 42 : 92, t + (isHeavy ? 0.72 : 0.34));
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(isHeavy ? 720 : 1400, t);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(isHeavy ? 0.16 : 0.075, t + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + (isHeavy ? 0.82 : 0.42));
+      osc.connect(filter).connect(gain).connect(storyAudio.master);
+      osc.start(t);
+      osc.stop(t + (isHeavy ? 0.9 : 0.48));
+
+      const breath = ctx.createOscillator();
+      const breathGain = ctx.createGain();
+      breath.type = "sine";
+      breath.frequency.setValueAtTime(540 + pha * 42, t);
+      breath.frequency.exponentialRampToValueAtTime(180 + pha * 22, t + 0.24);
+      breathGain.gain.setValueAtTime(0, t);
+      breathGain.gain.linearRampToValueAtTime(kind === "open" ? 0.055 : 0.035, t + 0.01);
+      breathGain.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+      breath.connect(breathGain).connect(storyAudio.master);
+      breath.start(t);
+      breath.stop(t + 0.36);
+      playStoryTexture(kind);
+    }
+
+    function updateStoryAudio(rawDt) {
+      if (!storyAudio) return;
+      const ctx = storyAudio.ctx;
+      const t = ctx.currentTime;
+      const target = game.storyOpen ? storyAudio.targetVolume : 0;
+      storyAudio.master.gain.setTargetAtTime(target, t, game.storyOpen ? 0.45 : 0.18);
+      if (game.storyOpen && storyAudio.phase !== game.phase) setStoryAudioTheme(game.phase);
+      if (game.storyOpen && t >= storyAudio.nextTextureTime) {
+        playStoryTexture("ambient");
+        const intervals = [1.55, 1.25, 0.58, 1.05, 0.44, 1.6];
+        storyAudio.nextTextureTime = t + intervals[clamp(game.phase, 0, intervals.length - 1)];
+      }
+      if (!game.storyOpen && storyAudio.master.gain.value < 0.002) {
+        storyAudio.targetVolume = 0;
+      }
     }
 
     function cinemaTheme(pha) {
@@ -470,6 +1176,105 @@ function initWorld() {
       ctx.restore();
     }
 
+    function drawCinematicDust(ctx, w, h, t, intensity = 1) {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      for (let i = 0; i < 44; i++) {
+        const drift = (t * (18 + (i % 7) * 4) + i * 53) % (w + 180);
+        const x = drift - 90;
+        const y = h * (0.24 + Math.abs(seededNoise(i + 2.4)) * 0.58);
+        const r = 8 + Math.abs(seededNoise(i + 12.1)) * 26;
+        const a = (0.018 + Math.abs(Math.sin(t * 0.7 + i)) * 0.025) * intensity;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, `rgba(255,225,160,${a})`);
+        g.addColorStop(1, "rgba(255,225,160,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawForegroundRocks(ctx, w, h, t, amount = 5) {
+      ctx.save();
+      ctx.fillStyle = "rgba(10,7,5,.68)";
+      for (let i = 0; i < amount; i++) {
+        const x = (i / Math.max(1, amount - 1)) * w + Math.sin(i * 2.2) * 32;
+        const y = h * (0.78 + (i % 2) * 0.04);
+        ctx.beginPath();
+        ctx.moveTo(x - 70, h);
+        ctx.lineTo(x - 48, y + Math.sin(t + i) * 5);
+        ctx.lineTo(x + 8, y - 22 - (i % 3) * 8);
+        ctx.lineTo(x + 76, h);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawSpeedLines(ctx, w, h, t, dir = 1, intensity = 1) {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.lineCap = "round";
+      for (let i = 0; i < 34; i++) {
+        const y = h * (0.42 + Math.abs(seededNoise(i + 31.5)) * 0.34);
+        const x = ((t * 260 * dir + i * 67) % (w + 240)) - 120;
+        const len = 42 + Math.abs(seededNoise(i + 7.7)) * 90;
+        ctx.strokeStyle = `rgba(255,226,168,${0.035 * intensity})`;
+        ctx.lineWidth = 1 + (i % 3);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - len * dir, y + Math.sin(i) * 8);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawSignalRings(ctx, w, h, t, x, y, intensity = 1) {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      for (let i = 0; i < 4; i++) {
+        const p = (t * 0.7 + i * 0.25) % 1;
+        ctx.strokeStyle = `rgba(255,226,128,${(1 - p) * 0.18 * intensity})`;
+        ctx.lineWidth = 2 + (1 - p) * 4;
+        ctx.beginPath();
+        ctx.arc(x, y, 30 + p * w * 0.42, 0, TAU);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawEmbers(ctx, w, h, t, amount = 55) {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      for (let i = 0; i < amount; i++) {
+        const x = (Math.abs(seededNoise(i + 80.3)) * w + Math.sin(t * 1.7 + i) * 36) % w;
+        const y = h - ((t * (32 + i % 9 * 8) + i * 29) % (h * 0.9));
+        const glow = 0.35 + Math.sin(t * 5 + i) * 0.35;
+        ctx.fillStyle = `rgba(255,132,44,${0.08 + glow * 0.13})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 1.2 + (i % 4) * 0.75, 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawSceneCurtain(ctx, w, h, amount) {
+      if (amount <= 0) return;
+      const alpha = clamp(amount, 0, 1);
+      ctx.save();
+      ctx.fillStyle = `rgba(4,2,1,${alpha * 0.62})`;
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = "screen";
+      const g = ctx.createRadialGradient(w * 0.5, h * 0.48, 0, w * 0.5, h * 0.48, w * 0.6);
+      g.addColorStop(0, `rgba(255,220,150,${alpha * 0.18})`);
+      g.addColorStop(1, "rgba(255,220,150,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+    }
+
     function advanceStoryShot(lines) {
       if (game.storyCaptionLock) return;
       game.storyCaptionLock = true;
@@ -479,6 +1284,9 @@ function initWorld() {
         storyCaptionEl.textContent = lines[game.storyCaptionIdx];
         game.storyCaptionTimer = 0;
         game.cinemaShotFade = 0;
+        game.cinemaBeatFlash = 1;
+        game.cinemaPulse = 1;
+        pulseStoryAudio("shot");
         storyCaptionEl.classList.remove("isChanging");
         game.storyCaptionLock = false;
         if (cinemaSceneTag) {
@@ -502,6 +1310,9 @@ function initWorld() {
       game.cinemaTime += rawDt;
       game.storyCaptionTimer += rawDt;
       game.cinemaShotFade = Math.min(1, game.cinemaShotFade + rawDt * 2.8);
+      game.cinemaBeatFlash = Math.max(0, game.cinemaBeatFlash - rawDt * 1.9);
+      game.cinemaPulse = Math.max(0, game.cinemaPulse - rawDt * 1.45);
+      updateStoryAudio(rawDt);
 
       if (game.storyCaptionTimer > STORY_SHOT_SEC && !game.storyCaptionLock) {
         advanceStoryShot(lines);
@@ -524,15 +1335,51 @@ function initWorld() {
       }
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, cssW, cssH);
+      const ovCx = cssW * 0.5;
+      const ovCy = cssH * 0.5;
+      const ovShot = game.storyCaptionIdx;
+      const ovProgress = clamp(game.storyCaptionTimer / STORY_SHOT_SEC, 0, 1);
+
+      drawCinematicDust(ctx, cssW, cssH, t, pha === 4 ? 1.35 : pha === 2 ? 1.08 : 0.72);
+      if (pha === 2 || pha === 4) drawSpeedLines(ctx, cssW, cssH, t, ovShot % 2 ? -1 : 1, pha === 2 ? 1.35 : 1);
+      if (pha === 3) drawSignalRings(ctx, cssW, cssH, t, cssW * 0.58, cssH * 0.42, 0.9 + ovShot * 0.18);
+      if (pha === 4) drawEmbers(ctx, cssW, cssH, t, 55);
+
+      if (game.cinemaBeatFlash > 0) {
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.fillStyle = `rgba(255,210,128,${game.cinemaBeatFlash * 0.18})`;
+        ctx.fillRect(0, 0, cssW, cssH);
+        ctx.restore();
+      }
+
+      if (game.cinemaShotFade < 1) drawSceneCurtain(ctx, cssW, cssH, 1 - game.cinemaShotFade);
+
+      const ovVig = ctx.createRadialGradient(ovCx, ovCy, cssW * 0.08, ovCx, ovCy, cssW * 0.86);
+      ovVig.addColorStop(0, "rgba(0,0,0,0)");
+      ovVig.addColorStop(0.58, "rgba(0,0,0,.08)");
+      ovVig.addColorStop(1, "rgba(0,0,0,.48)");
+      ctx.fillStyle = ovVig;
+      ctx.fillRect(0, 0, cssW, cssH);
+      drawFilmGrain(ctx, cssW, cssH, t + ovProgress);
+      return;
+
       ctx.fillStyle = "#030201";
       ctx.fillRect(0, 0, cssW, cssH);
       const theme = cinemaTheme(pha);
       const cx = cssW * 0.5;
       const cy = cssH * 0.5;
-      const panX = Math.sin(t * 0.18 + pha * 0.7) * cssW * 0.04;
-      const panY = Math.cos(t * 0.14 + pha) * cssH * 0.025;
-      const zoom = 1.08 + Math.sin(t * 0.26) * 0.045;
       const shot = game.storyCaptionIdx;
+      const shotProgress = clamp(game.storyCaptionTimer / STORY_SHOT_SEC, 0, 1);
+      const breath = easeInOutSine(shotProgress);
+      const introPush = 1 - game.cinemaShotFade;
+      const shake = (pha === 2 ? 2.2 : pha === 3 ? 2.8 : pha === 4 ? 4.2 : 0.7) * game.cinemaPulse;
+      const shotDir = shot % 2 === 0 ? 1 : -1;
+      const panX = (Math.sin(t * 0.18 + pha * 0.7) * 0.035 + (breath - 0.5) * 0.045 * shotDir) * cssW + Math.sin(t * 18) * shake;
+      const panY = (Math.cos(t * 0.14 + pha) * 0.018 + (shot - 1) * 0.01) * cssH + Math.cos(t * 15) * shake;
+      const zoom = 1.08 + breath * 0.07 + Math.sin(t * 0.26) * 0.024 + introPush * 0.045;
+      renderStory3D(rawDt, cssW, cssH, pha, shot, shotProgress, breath);
 
       ctx.save();
       ctx.translate(cx + panX, cy + panY);
@@ -548,6 +1395,7 @@ function initWorld() {
 
       if (pha >= 1 && pha <= 3) drawCinemaStars(ctx, cssW, cssH, t, 100);
       drawCinemaClouds(ctx, cssW, cssH, t, cssH * 0.18);
+      drawCinematicDust(ctx, cssW, cssH, t, pha === 4 ? 1.8 : pha === 2 ? 1.35 : 0.9);
 
       const sunX = cssW * (0.62 + Math.sin(t * 0.07) * 0.05);
       const sunY = cssH * (0.2 + Math.cos(t * 0.09) * 0.025);
@@ -575,6 +1423,7 @@ function initWorld() {
         drawCinemaTents(ctx, cssW, cssH, t);
         drawCinemaSilhouettes(ctx, cssW, cssH, t, 12, cssH * 0.68, 24);
         drawCinemaCity(ctx, cssW, cssH, t, 0.2 + shot * 0.15);
+        drawLightRays(ctx, cssW, cssH, t + shot, cssW * 0.34, cssH * 0.64, "rgba(255,170,80,.22)");
       } else if (pha === 1) {
         drawCinemaCity(ctx, cssW, cssH, t, 0.85);
         ctx.fillStyle = "rgba(22,16,12,.7)";
@@ -593,10 +1442,12 @@ function initWorld() {
         ctx.lineTo(cssW * 0.55, cssH * 0.52);
         ctx.stroke();
         ctx.setLineDash([]);
+        drawCinematicDust(ctx, cssW, cssH, t * 0.7 + 8, 1.2);
       } else if (pha === 2) {
         drawCinemaCity(ctx, cssW, cssH, t, 0.5);
         drawCinemaSilhouettes(ctx, cssW, cssH, t, 10, cssH * 0.64, 52, 1);
         drawCinemaSilhouettes(ctx, cssW, cssH, t, 6, cssH * 0.68, 38, -1);
+        drawSpeedLines(ctx, cssW, cssH, t, 1, 1.8);
         ctx.fillStyle = "rgba(160,120,70,.22)";
         for (let k = 0; k < 8; k++) {
           const px = ((t * 55 + k * 65 + shot * 20) % (cssW + 100)) - 50;
@@ -626,12 +1477,15 @@ function initWorld() {
         ctx.beginPath();
         ctx.arc(tipX, tipY, 24 + bladeGlow * 12, 0, TAU);
         ctx.fill();
+        drawSignalRings(ctx, cssW, cssH, t, tipX, tipY, 1 + shot * 0.25);
         drawCinemaSilhouettes(ctx, cssW, cssH, t, 4, cssH * 0.55, 8, 1);
       } else if (pha === 4) {
         drawCinemaCity(ctx, cssW, cssH, t, 0.4);
         drawCinemaSmoke(ctx, cssW, cssH, t, cssW * 0.72, cssH * 0.42, 10 + shot * 2, true);
+        drawEmbers(ctx, cssW, cssH, t, 70 + shot * 10);
         drawCinemaSilhouettes(ctx, cssW, cssH, t, 7, cssH * 0.66, 18, -1);
         drawCinemaSilhouettes(ctx, cssW, cssH, t, 7, cssH * 0.64, 22, 1);
+        drawSpeedLines(ctx, cssW, cssH, t, shot % 2 ? -1 : 1, 1.15);
         ctx.fillStyle = "rgba(255,60,20,.12)";
         ctx.fillRect(0, 0, cssW, cssH);
       } else {
@@ -642,14 +1496,24 @@ function initWorld() {
         light.addColorStop(1, "rgba(255,240,200,0)");
         ctx.fillStyle = light;
         ctx.fillRect(0, 0, cssW, cssH);
+        drawCinematicDust(ctx, cssW, cssH, t * 0.8, 0.75);
       }
+
+      drawForegroundRocks(ctx, cssW, cssH, t, pha === 1 ? 8 : 5);
 
       ctx.restore();
 
       const fade = game.cinemaShotFade;
       if (fade < 1) {
-        ctx.fillStyle = `rgba(0,0,0,${(1 - fade) * 0.55})`;
+        drawSceneCurtain(ctx, cssW, cssH, 1 - fade);
+      }
+
+      if (game.cinemaBeatFlash > 0) {
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.fillStyle = `rgba(255,210,128,${game.cinemaBeatFlash * 0.12})`;
         ctx.fillRect(0, 0, cssW, cssH);
+        ctx.restore();
       }
 
       const vig = ctx.createRadialGradient(cx, cy, cssW * 0.05, cx, cy, cssW * 0.95);
@@ -668,6 +1532,7 @@ function initWorld() {
     }
 
     function showStoryBeat(index) {
+      unlockAllAudio();
       const beat = storyBeats[index];
       storyKicker.textContent = beat.kicker;
       storyTitle.textContent = beat.title;
@@ -677,6 +1542,8 @@ function initWorld() {
       game.storyCaptionTimer = 0;
       game.cinemaTime = 0;
       game.cinemaShotFade = 1;
+      game.cinemaBeatFlash = 1;
+      game.cinemaPulse = 1;
       game.storyCaptionLock = false;
       storyCaptionEl.classList.remove("isChanging");
       storyCaptionEl.textContent = lines[0];
@@ -688,6 +1555,15 @@ function initWorld() {
       storyCard.classList.add("show");
       document.body.classList.add("storyOpen");
       game.storyOpen = true;
+      prepareStoryWorldView(index);
+      const openingPose = storyWorldPose(index, 0, 0);
+      camera.position.copy(openingPose.pos);
+      camera.lookAt(openingPose.target);
+      camera.fov = openingPose.fov;
+      camera.updateProjectionMatrix();
+      setStoryAudioTheme(index, true);
+      playUiSfx(index >= 3 ? "signal" : "start");
+      pulseStoryAudio("open");
       requestAnimationFrame(() => layoutStoryCanvas());
     }
 
@@ -695,6 +1571,9 @@ function initWorld() {
       storyCard.classList.remove("show");
       document.body.classList.remove("storyOpen");
       game.storyOpen = false;
+      updateStoryAudio(0);
+      camera.fov = 68;
+      camera.updateProjectionMatrix();
       if (document.pointerLockElement !== renderer.domElement && game.started) {
         tryPointerLock();
       }
@@ -745,6 +1624,8 @@ function initWorld() {
 
     function beginGame(showPrologue = false) {
       if (game.started) return;
+      unlockAllAudio();
+      playUiSfx("start");
       game.started = true;
       document.body.classList.add("gameRunning");
       if (player.group) {
@@ -1021,6 +1902,7 @@ function initWorld() {
       if (game.signalGiven) return;
       game.signalGiven = true;
       player.swordRaised = 1;
+      playUiSfx("signal");
       showToast("החרב מורמת — המארב יוצא אל העיר!");
       revealAmbush();
       igniteCity();
@@ -1032,6 +1914,7 @@ function initWorld() {
     function attackNearestEnemy() {
       if (game.attackCooldown > 0) return;
       game.attackCooldown = .62;
+      game.attackCombo = (game.attackCombo + 1) % 3;
       player.attackSwing = 1;
 
       const camFx = Math.sin(game.cameraYaw);
@@ -1065,6 +1948,7 @@ function initWorld() {
       const nearestDist = inCone ? inConeDist : (fallbackDist <= 7.4 ? fallbackDist : Infinity);
 
       if (nearest && nearestDist < (inCone ? 9.6 : 7.45)) {
+        playAttackSfx(true, game.attackCombo);
         nearest.userData.hp -= 1;
         nearest.userData.hitFlash = .22;
         nearest.userData.routed = true;
@@ -1073,6 +1957,7 @@ function initWorld() {
         createHitSpark(nearest.position.clone().add(new THREE.Vector3(0, 1.8, 0)), 0xffd66c);
         if (nearest.userData.hp <= 0) defeatEnemy(nearest);
       } else {
+        playAttackSfx(false, game.attackCombo);
         showToast("אין אויב מספיק קרוב להנפה.");
       }
     }
@@ -1460,6 +2345,83 @@ function initWorld() {
       camera.lookAt(tmpVec2);
     }
 
+    const storyShotPlan = [
+      [
+        { from: [-28, 7.4, 74], to: [-2, 2.4, 50], endFrom: [-19, 8.2, 67], endTo: [7, 2.6, 32], fov: 45 },
+        { from: [5, 5.8, 27], to: [7, 2.8, 10], endFrom: [1, 7.2, 21], endTo: [18, 3.6, -20], fov: 39 },
+        { from: [-18, 5.2, 58], to: [-8, 2.6, 50], endFrom: [9, 6.8, 58], endTo: [8, 2.9, 50], fov: 42 }
+      ],
+      [
+        { from: [-34, 7.2, 1], to: [-46, 2.7, -38], endFrom: [-19, 7.8, -5], endTo: [-37, 2.4, -42], fov: 40 },
+        { from: [19, 5.8, -6], to: [18, 3.2, -56], endFrom: [8, 6.3, -19], endTo: [18, 3.4, -56], fov: 38 },
+        { from: [38, 7.4, -42], to: [24, 2.7, -51], endFrom: [22, 7.9, -35], endTo: [7, 2.4, -20], fov: 43 }
+      ],
+      [
+        { from: [37, 5.4, -38], to: [18, 2.8, -56], endFrom: [24, 5.8, -24], endTo: [25, 2.6, -45], fov: 42 },
+        { from: [13, 4.9, 13], to: [0, 2.3, 28], endFrom: [-16, 5.2, 24], endTo: [-2, 2.5, 38], fov: 46 },
+        { from: [-13, 6.1, 31], to: [3, 2.2, 20], endFrom: [9, 7.2, 35], endTo: [3, 2.6, 20], fov: 40 }
+      ],
+      [
+        { from: [-11, 4.8, 19], to: [7, 3.1, 10], endFrom: [-5, 6.3, 16], endTo: [7, 4.2, 10], fov: 35 },
+        { from: [-45, 7.2, -45], to: [-36, 2.5, -54], endFrom: [-21, 7.6, -42], endTo: [4, 2.9, -53], fov: 42 },
+        { from: [12, 8.2, -28], to: [18, 4.2, -56], endFrom: [31, 10.4, -38], endTo: [18, 6.2, -56], fov: 38 }
+      ],
+      [
+        { from: [42, 13.5, -36], to: [18, 7.2, -56], endFrom: [24, 15.2, -22], endTo: [18, 8.8, -56], fov: 40 },
+        { from: [-5, 6.4, 25], to: [4, 2.6, 20], endFrom: [18, 7.2, 6], endTo: [17, 2.9, -17], fov: 44 },
+        { from: [-24, 8.6, 16], to: [2, 2.8, 6], endFrom: [36, 9.2, -22], endTo: [17, 3.8, -38], fov: 46 }
+      ],
+      [
+        { from: [38, 13.8, -24], to: [18, 5.2, -56], endFrom: [24, 15.2, -8], endTo: [18, 5.5, -56], fov: 43 },
+        { from: [-12, 7.8, 47], to: [0, 2.4, 50], endFrom: [7, 8.4, 39], endTo: [7, 2.8, 20], fov: 42 },
+        { from: [46, 18, 2], to: [16, 4.4, -40], endFrom: [11, 16, 35], endTo: [5, 3.5, 20], fov: 45 }
+      ]
+    ];
+
+    function shotVec(values) {
+      return new THREE.Vector3(values[0], values[1], values[2]);
+    }
+
+    function storyWorldPose(pha, shot, progress) {
+      const phaseShots = storyShotPlan[clamp(pha, 0, storyShotPlan.length - 1)];
+      const plan = phaseShots[clamp(shot, 0, phaseShots.length - 1)] || phaseShots[0];
+      const p = easeInOutSine(progress);
+      const pos = shotVec(plan.from).lerp(shotVec(plan.endFrom || plan.from), p);
+      const target = shotVec(plan.to).lerp(shotVec(plan.endTo || plan.to), p);
+      const breathe = Math.sin(progress * Math.PI) * 0.18;
+      pos.y += breathe;
+      target.y += Math.sin(game.visualTime * 0.28 + shot) * 0.08;
+      return { pos, target, fov: plan.fov || 42 };
+    }
+
+    function prepareStoryWorldView(pha) {
+      const showSmoke = pha >= 4 || game.signalGiven;
+      for (const flame of cityFlames) flame.visible = showSmoke;
+      for (const puff of smokePuffs) puff.visible = showSmoke;
+      if (pha >= 3) {
+        for (const soldier of ambushers) {
+          soldier.visible = true;
+          if (!soldier.userData.state || soldier.userData.state === "hidden") soldier.userData.state = "rushCity";
+        }
+      }
+    }
+
+    function updateStoryWorldCamera(rawDt) {
+      if (!game.storyOpen) return;
+      prepareStoryWorldView(game.phase);
+      const progress = clamp(game.storyCaptionTimer / STORY_SHOT_SEC, 0, 1);
+      const pose = storyWorldPose(game.phase, game.storyCaptionIdx, progress);
+      const hit = game.cinemaPulse * (game.phase >= 3 ? 0.72 : 0.35);
+      pose.pos.x += Math.sin(game.visualTime * 17) * hit;
+      pose.pos.y += Math.cos(game.visualTime * 13) * hit * 0.28;
+      pose.pos.z += Math.cos(game.visualTime * 15) * hit;
+      const follow = 1 - Math.exp(-rawDt * 5.5);
+      camera.position.lerp(pose.pos, follow);
+      camera.fov = lerp(camera.fov, pose.fov, 1 - Math.exp(-rawDt * 4));
+      camera.updateProjectionMatrix();
+      camera.lookAt(pose.target);
+    }
+
     let miniMapCooldown = 0;
     let lastMiniX = Infinity;
     let lastMiniZ = Infinity;
@@ -1629,7 +2591,8 @@ function initWorld() {
       updateMarkers(logicDt);
       const effectsDt = game.storyOpen ? rawDt * 0.55 : rawDt;
       updateEffects(effectsDt);
-      updateCamera(logicDt);
+      if (game.storyOpen) updateStoryWorldCamera(rawDt);
+      else updateCamera(logicDt);
       if (game.storyOpen) paintStoryScene(rawDt);
       updateHud();
       drawMiniMap(false, rawDt);
@@ -1646,6 +2609,7 @@ function initWorld() {
     }
 
     function onKeyDown(event) {
+      unlockAllAudio();
       if (event.repeat && event.code !== "Space") return;
       if (event.code === "Enter" && game.storyOpen) {
         hideStory();
@@ -1680,12 +2644,13 @@ function initWorld() {
 
     function onMouseMove(event) {
       if (document.pointerLockElement === renderer.domElement) {
-        game.targetCameraYaw -= event.movementX * .0032;
-        game.targetCameraPitch = clamp(game.targetCameraPitch - event.movementY * .0023, -.68, .26);
+        game.targetCameraYaw -= event.movementX * MOUSE_LOOK_X;
+        game.targetCameraPitch = clamp(game.targetCameraPitch - event.movementY * MOUSE_LOOK_Y, -.68, .26);
       }
     }
 
     function onPointerDown(event) {
+      unlockAllAudio();
       if (!game.started || game.storyOpen || game.isGameOver) return;
       game.dragLook = true;
       game.lastPointerX = event.clientX;
@@ -1699,8 +2664,8 @@ function initWorld() {
       const dy = event.clientY - game.lastPointerY;
       game.lastPointerX = event.clientX;
       game.lastPointerY = event.clientY;
-      game.targetCameraYaw -= dx * .004;
-      game.targetCameraPitch = clamp(game.targetCameraPitch - dy * .003, -.68, .26);
+      game.targetCameraYaw -= dx * DRAG_LOOK_X;
+      game.targetCameraPitch = clamp(game.targetCameraPitch - dy * DRAG_LOOK_Y, -.68, .26);
     }
 
     function onPointerUp() {
@@ -1712,6 +2677,7 @@ function initWorld() {
         const code = button.dataset.key;
         const press = event => {
           event.preventDefault();
+          unlockAllAudio();
           keys.add(code);
           touchKeys.set(code, true);
           if (code === "Space") handleAction();
@@ -1749,4 +2715,3 @@ function initWorld() {
 initWorld();
 bindTouchControls();
 requestAnimationFrame(animate);
-
