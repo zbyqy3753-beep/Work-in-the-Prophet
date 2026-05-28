@@ -2143,8 +2143,8 @@ function initWorld() {
           moveToward(enemy, player.position, enemy.userData.speed, dt, 2.1);
           const d = distance2D(enemy.position, player.position);
           if (d < 2.7 && enemy.userData.damageTimer <= 0) {
-            enemy.userData.damageTimer = 1.0;
-            damagePlayer(7 + Math.random() * 4);
+            enemy.userData.damageTimer = 1.8;
+            damagePlayer(3 + Math.random() * 2);
           }
           if (!enemy.userData.lured && enemy.position.z > 11) {
             enemy.userData.lured = true;
@@ -2161,8 +2161,8 @@ function initWorld() {
           moveToward(enemy, target, enemy.userData.speed * .88, dt, 2.5);
           const d = distance2D(enemy.position, player.position);
           if (d < 2.7 && enemy.userData.damageTimer <= 0 && game.phase >= 4) {
-            enemy.userData.damageTimer = 1.1;
-            damagePlayer(5 + Math.random() * 3);
+            enemy.userData.damageTimer = 1.8;
+            damagePlayer(3 + Math.random() * 2);
           }
         }
 
@@ -2243,7 +2243,7 @@ function initWorld() {
         if (activeFieldEnemies.length <= 2 || game.enemiesDefeated >= 16) {
           game.battleWon = true;
           setPhase(5, true);
-          game.health = Math.min(100, game.health + 18);
+          game.health = Math.min(100, game.health + 28);
           game.morale = 100;
           game.progress = 100;
           markHudDirty();
