@@ -1843,7 +1843,7 @@ function createEnemy(x, z, state = "guard") {
     type: "enemy",
     state,
     hp: 3,
-    speed: 8.3 + Math.random() * 2.2,
+    speed: 5.5 + Math.random() * 1.5,
     base: new THREE.Vector3(x, 0, z),
     target: new THREE.Vector3(x, 0, z),
     bob: Math.random() * TAU,
