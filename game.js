@@ -1734,8 +1734,8 @@ function initWorld() {
       let inputZ = 0;
       if (keys.has("KeyW") || keys.has("ArrowUp")) inputZ += 1;
       if (keys.has("KeyS") || keys.has("ArrowDown")) inputZ -= 1;
-      if (keys.has("KeyA") || keys.has("ArrowLeft")) inputX -= 1;
-      if (keys.has("KeyD") || keys.has("ArrowRight")) inputX += 1;
+      if (keys.has("KeyA") || keys.has("ArrowLeft")) inputX += 1;
+      if (keys.has("KeyD") || keys.has("ArrowRight")) inputX -= 1;
 
       const moving = inputX !== 0 || inputZ !== 0;
       const yaw = game.cameraYaw;
